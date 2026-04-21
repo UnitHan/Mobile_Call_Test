@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.qabulls.pymobiledevice3.tunneld</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/qabulls/Documents/sound/.venv/bin/pymobiledevice3</string>
+        <string>remote</string>
+        <string>tunneld</string>
+    </array>
+
+    <!-- 크래시/종료 시 자동 재시작 -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- 부팅 시 자동 시작 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/pymobiledevice3-tunneld.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/pymobiledevice3-tunneld-error.log</string>
+
+    <!-- 재시작 간격 (초) -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+</dict>
+</plist>

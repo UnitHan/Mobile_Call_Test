@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# Config with sensitive data
+config.py
+
+# API 키 / 환경 설정 파일
+env
+.env
+*.key
+
+# Logs
+*.log
+
+# 녹음 데이터 (대용량 + 개인 정보)
+recordings/
+audio_files/recordings/
+*.wav
+*.m4a
+
+# Tauri / Rust 빌드 산출물
+sound-test-app/src-tauri/target/
+sound-test-app/node_modules/
+sound-test-app/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 외부 바이너리 / 라이브러리
+scrcpy-macos-aarch64-v3.3.4/
+visqol-3.3.3/
+
+# 테스트 로그 / 리포트
+logs/
+reports/
+.pytest_cache/
+
+# 리포트 / 벤치마크 결과 / 백업
+*.html
+*.bak
+bench_stability_*.json
+
+# OS
+.DS_Store
+Thumbs.db

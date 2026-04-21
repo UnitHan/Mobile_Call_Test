@@ -1,0 +1,8 @@
+# Python 바이트코드 캐시 — 변경 시 Tauri dev 재시작 방지
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# 테스트 실행 중 생성되는 임시 파일
+scripts/audio_files/**

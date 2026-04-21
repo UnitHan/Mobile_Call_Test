@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XCUIElementTypeApplication type="XCUIElementTypeApplication" name="익시오" label="익시오" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+  <XCUIElementTypeWindow type="XCUIElementTypeWindow" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+    <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+        <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+          <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+            <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+              <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+                <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+                  <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+                    <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="402" height="874" index="0" traits="">
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="Icon_search" label="Icon_search" enabled="true" visible="true" accessible="true" x="313" y="70" width="38" height="34" index="0" traits="Button"/>
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="Icon_whiteMenu" label="Icon_whiteMenu" enabled="true" visible="true" accessible="true" x="356" y="60" width="38" height="54" index="1" traits="Button"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="유심 카드를 인식할 수 없어요. 유심 카드가 없는 상태에서는 긴급 전화만 가능해요." name="유심 카드를 인식할 수 없어요. 유심 카드가 없는 상태에서는 긴급 전화만 가능해요." label="유심 카드를 인식할 수 없어요. 유심 카드가 없는 상태에서는 긴급 전화만 가능해요." enabled="true" visible="false" accessible="false" x="32" y="138" width="325" height="38" index="2" traits="StaticText"/>
+                      <XCUIElementTypeScrollView type="XCUIElementTypeScrollView" enabled="true" visible="true" accessible="false" x="16" y="122" width="370" height="61" index="3" traits="">
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="16" y="122" width="1051" height="61" index="0" traits="">
+                          <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="32" y="133" width="709" height="50" index="0" traits="">
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="연결 안 됨" name="연결 안 됨" label="연결 안 됨" enabled="true" visible="true" accessible="true" x="32" y="133" width="48" height="15" index="0" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="• 7분 전" name="• 7분 전" label="• 7분 전" enabled="true" visible="true" accessible="true" x="83" y="133" width="40" height="15" index="1" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="공공이오" name="공공이오" label="공공이오" enabled="true" visible="true" accessible="true" x="32" y="149" width="49" height="18" index="2" traits="StaticText"/>
+                            <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_arrowDown" label="Icon_arrowDown" enabled="true" visible="true" accessible="false" x="78" y="178" width="11" height="5" index="3" traits="Image"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="부재중" name="부재중" label="부재중" enabled="true" visible="true" accessible="true" x="174" y="133" width="32" height="15" index="4" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="• 5시간 전" name="• 5시간 전" label="• 5시간 전" enabled="true" visible="true" accessible="true" x="210" y="133" width="51" height="15" index="5" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="010-8333-2089" name="010-8333-2089" label="010-8333-2089" enabled="true" visible="true" accessible="true" x="174" y="149" width="108" height="18" index="6" traits="StaticText"/>
+                            <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_arrowDown" label="Icon_arrowDown" enabled="true" visible="true" accessible="false" x="227" y="178" width="11" height="5" index="7" traits="Image"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="연결 안 됨" name="연결 안 됨" label="연결 안 됨" enabled="true" visible="true" accessible="true" x="329" y="133" width="48" height="15" index="8" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="• 5시간 전" name="• 5시간 전" label="• 5시간 전" enabled="true" visible="true" accessible="true" x="380" y="133" width="52" height="15" index="9" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="01083305" name="01083305" label="01083305" enabled="true" visible="true" accessible="true" x="329" y="149" width="70" height="18" index="10" traits="StaticText"/>
+                            <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_arrowDown" label="Icon_arrowDown" enabled="true" visible="true" accessible="false" x="381" y="178" width="11" height="5" index="11" traits="Image"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="부재중" name="부재중" label="부재중" enabled="true" visible="false" accessible="true" x="483" y="133" width="32" height="15" index="12" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="• 5시간 전" name="• 5시간 전" label="• 5시간 전" enabled="true" visible="false" accessible="true" x="518" y="133" width="51" height="15" index="13" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="010-8333-2052" name="010-8333-2052" label="010-8333-2052" enabled="true" visible="false" accessible="true" x="483" y="149" width="107" height="18" index="14" traits="StaticText"/>
+                            <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_arrowDown" label="Icon_arrowDown" enabled="true" visible="false" accessible="false" x="535" y="178" width="11" height="5" index="15" traits="Image"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="부재중" name="부재중" label="부재중" enabled="true" visible="false" accessible="true" x="637" y="133" width="32" height="15" index="16" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="• 5시간 전" name="• 5시간 전" label="• 5시간 전" enabled="true" visible="false" accessible="true" x="672" y="133" width="52" height="15" index="17" traits="StaticText"/>
+                            <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="010-8333-1130" name="010-8333-1130" label="010-8333-1130" enabled="true" visible="false" accessible="true" x="637" y="149" width="104" height="18" index="18" traits="StaticText"/>
+                            <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_arrowDown" label="Icon_arrowDown" enabled="true" visible="false" accessible="false" x="688" y="178" width="10" height="5" index="19" traits="Image"/>
+                          </XCUIElementTypeOther>
+                        </XCUIElementTypeOther>
+                      </XCUIElementTypeScrollView>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="최근 연결" name="최근 연결" label="최근 연결" enabled="true" visible="false" accessible="false" x="32" y="193" width="45" height="15" index="4" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" enabled="true" visible="false" accessible="false" x="84" y="193" width="1" height="15" index="5" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" enabled="true" visible="false" accessible="false" x="0" y="272" width="402" height="50" index="6" traits="StaticText"/>
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="연락처 추가" label="연락처 추가" enabled="true" visible="false" accessible="false" x="159" y="332" width="84" height="17" index="7" traits="Button">
+                        <XCUIElementTypeImage type="XCUIElementTypeImage" name="FilledIcon_pupleAdd" label="FilledIcon_pupleAdd" enabled="true" visible="false" accessible="false" x="159" y="334" width="16" height="15" index="0" traits="Image"/>
+                        <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="연락처 추가" name="연락처 추가" label="연락처 추가" enabled="true" visible="false" accessible="false" x="178" y="332" width="65" height="17" index="1" traits="StaticText"/>
+                      </XCUIElementTypeButton>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="53" y="357" width="302" height="410" index="8" traits="">
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="일" label="일" enabled="true" visible="true" accessible="true" x="57" y="357" width="78" height="77" index="0" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="1" name="1" label="1" enabled="true" visible="true" accessible="false" x="88" y="368" width="17" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㄱㄴ" name="ㄱㄴ" label="ㄱㄴ" enabled="true" visible="true" accessible="false" x="87" y="411" width="18" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="이" label="이" enabled="true" visible="true" accessible="true" x="162" y="357" width="78" height="77" index="1" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="2" name="2" label="2" enabled="true" visible="true" accessible="false" x="190" y="367" width="22" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ABC" name="ABC" label="ABC" enabled="true" visible="true" accessible="false" x="191" y="410" width="21" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="삼" label="삼" enabled="true" visible="true" accessible="true" x="267" y="357" width="78" height="77" index="2" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="3" name="3" label="3" enabled="true" visible="true" accessible="false" x="294" y="367" width="23" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="DEF" name="DEF" label="DEF" enabled="true" visible="true" accessible="false" x="296" y="410" width="19" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="사" label="사" enabled="true" visible="true" accessible="true" x="57" y="438" width="78" height="78" index="3" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="4" name="4" label="4" enabled="true" visible="true" accessible="false" x="84" y="443" width="24" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㄱㅋ" name="ㄱㅋ" label="ㄱㅋ" enabled="true" visible="true" accessible="false" x="87" y="486" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="GHI" name="GHI" label="GHI" enabled="true" visible="true" accessible="false" x="87" y="498" width="18" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="오" label="오" enabled="true" visible="true" accessible="true" x="162" y="438" width="78" height="78" index="4" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="5" name="5" label="5" enabled="true" visible="true" accessible="false" x="190" y="443" width="22" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㄴㄹ" name="ㄴㄹ" label="ㄴㄹ" enabled="true" visible="true" accessible="false" x="192" y="486" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="JKL" name="JKL" label="JKL" enabled="true" visible="true" accessible="false" x="192" y="498" width="18" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="육" label="육" enabled="true" visible="true" accessible="true" x="267" y="438" width="78" height="78" index="5" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="6" name="6" label="6" enabled="true" visible="true" accessible="false" x="294" y="443" width="23" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㄷㅌ" name="ㄷㅌ" label="ㄷㅌ" enabled="true" visible="true" accessible="false" x="297" y="486" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="MNO" name="MNO" label="MNO" enabled="true" visible="true" accessible="false" x="294" y="498" width="24" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="칠" label="칠" enabled="true" visible="true" accessible="true" x="57" y="519" width="78" height="78" index="6" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="7" name="7" label="7" enabled="true" visible="true" accessible="false" x="86" y="524" width="21" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㅂㅍ" name="ㅂㅍ" label="ㅂㅍ" enabled="true" visible="true" accessible="false" x="87" y="567" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="PQRS" name="PQRS" label="PQRS" enabled="true" visible="true" accessible="false" x="83" y="579" width="27" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="팔" label="팔" enabled="true" visible="true" accessible="true" x="162" y="519" width="78" height="78" index="7" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="8" name="8" label="8" enabled="true" visible="true" accessible="false" x="189" y="524" width="24" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㅅㅎ" name="ㅅㅎ" label="ㅅㅎ" enabled="true" visible="true" accessible="false" x="192" y="567" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="TUV" name="TUV" label="TUV" enabled="true" visible="true" accessible="false" x="191" y="579" width="20" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="구" label="구" enabled="true" visible="true" accessible="true" x="267" y="519" width="78" height="78" index="8" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="9" name="9" label="9" enabled="true" visible="true" accessible="false" x="294" y="524" width="23" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㅈㅊ" name="ㅈㅊ" label="ㅈㅊ" enabled="true" visible="true" accessible="false" x="297" y="567" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="WXYZ" name="WXYZ" label="WXYZ" enabled="true" visible="true" accessible="false" x="291" y="579" width="29" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="별" label="별" enabled="true" visible="true" accessible="true" x="57" y="600" width="78" height="78" index="9" traits="">
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="dual_icon_20_dark" label="dual_icon_20_dark" enabled="true" visible="true" accessible="false" x="57" y="600" width="78" height="78" index="0" traits="Image"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="공" label="공" enabled="true" visible="true" accessible="true" x="162" y="600" width="78" height="78" index="10" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="0" name="0" label="0" enabled="true" visible="true" accessible="false" x="189" y="605" width="24" height="44" index="0" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ㅇㅁ" name="ㅇㅁ" label="ㅇㅁ" enabled="true" visible="true" accessible="false" x="192" y="648" width="18" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="+" name="+" label="+" enabled="true" visible="true" accessible="false" x="197" y="660" width="8" height="13" index="2" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="우물정자" label="우물정자" enabled="true" visible="true" accessible="true" x="267" y="600" width="78" height="78" index="11" traits="">
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="#" name="#" label="#" enabled="true" visible="true" accessible="false" x="267" y="600" width="78" height="78" index="0" traits="StaticText"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="true" x="53" y="681" width="86" height="86" index="12" traits=""/>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="전화걸기" label="전화걸기" enabled="true" visible="true" accessible="true" x="162" y="682" width="78" height="84" index="13" traits="">
+                          <XCUIElementTypeButton type="XCUIElementTypeButton" name="전화걸기" label="전화걸기" enabled="true" visible="true" accessible="false" x="162" y="682" width="78" height="84" index="0" traits="Button"/>
+                        </XCUIElementTypeOther>
+                        <XCUIElementTypeOther type="XCUIElementTypeOther" name="지우기" label="지우기" enabled="true" visible="true" accessible="true" x="257" y="681" width="97" height="86" index="14" traits=""/>
+                      </XCUIElementTypeOther>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" value="총 다섯개 중 첫번째" name="최근기록 탭" label="최근기록 탭" enabled="true" visible="true" accessible="true" x="12" y="791" width="76" height="41" index="9" traits="">
+                        <XCUIElementTypeButton type="XCUIElementTypeButton" name="최근 기록" label="최근 기록" enabled="true" visible="true" accessible="false" x="12" y="791" width="76" height="41" index="0" traits="Button">
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_callHistory" label="Icon_callHistory" enabled="true" visible="true" accessible="false" x="37" y="791" width="25" height="25" index="0" traits="Image"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="최근 기록" name="최근 기록" label="최근 기록" enabled="true" visible="true" accessible="false" x="31" y="817" width="38" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeButton>
+                      </XCUIElementTypeOther>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" value="총 다섯개 중 두번째" name="연락처 탭" label="연락처 탭" enabled="true" visible="true" accessible="true" x="87" y="791" width="77" height="41" index="10" traits="">
+                        <XCUIElementTypeButton type="XCUIElementTypeButton" name="연락처" label="연락처" enabled="true" visible="true" accessible="false" x="87" y="791" width="77" height="41" index="0" traits="Button">
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_contact" label="Icon_contact" enabled="true" visible="true" accessible="false" x="113" y="791" width="25" height="25" index="0" traits="Image"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="연락처" name="연락처" label="연락처" enabled="true" visible="true" accessible="false" x="112" y="817" width="27" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeButton>
+                      </XCUIElementTypeOther>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" value="선택됨, 총 다섯개 중 세번째" name="키패드 탭" label="키패드 탭" enabled="true" visible="true" accessible="true" x="163" y="791" width="76" height="41" index="11" traits="">
+                        <XCUIElementTypeButton type="XCUIElementTypeButton" enabled="true" visible="true" accessible="false" x="163" y="791" width="76" height="41" index="0" traits="Button">
+                          <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="163" y="783" width="76" height="57" index="0" traits=""/>
+                        </XCUIElementTypeButton>
+                      </XCUIElementTypeOther>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" value="총 다섯개 중 네번째" name="디스커버 탭" label="디스커버 탭" enabled="true" visible="true" accessible="true" x="238" y="791" width="77" height="41" index="12" traits="">
+                        <XCUIElementTypeButton type="XCUIElementTypeButton" name="디스커버" label="디스커버" enabled="true" visible="true" accessible="false" x="238" y="791" width="77" height="41" index="0" traits="Button">
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_discover" label="Icon_discover" enabled="true" visible="true" accessible="false" x="264" y="791" width="25" height="25" index="0" traits="Image"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="디스커버" name="디스커버" label="디스커버" enabled="true" visible="true" accessible="false" x="259" y="817" width="35" height="13" index="1" traits="StaticText"/>
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="badge_new_12_dark" label="badge_new_12_dark" enabled="true" visible="true" accessible="false" x="279" y="788" width="13" height="13" index="2" traits="Image"/>
+                        </XCUIElementTypeButton>
+                      </XCUIElementTypeOther>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" value="총 다섯개 중 다섯번째" name="설정 탭" label="설정 탭" enabled="true" visible="true" accessible="true" x="314" y="791" width="76" height="41" index="13" traits="">
+                        <XCUIElementTypeButton type="XCUIElementTypeButton" name="설정" label="설정" enabled="true" visible="true" accessible="false" x="314" y="791" width="76" height="41" index="0" traits="Button">
+                          <XCUIElementTypeImage type="XCUIElementTypeImage" name="Icon_setting" label="Icon_setting" enabled="true" visible="true" accessible="false" x="340" y="791" width="25" height="25" index="0" traits="Image"/>
+                          <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="설정" name="설정" label="설정" enabled="true" visible="true" accessible="false" x="343" y="817" width="18" height="13" index="1" traits="StaticText"/>
+                        </XCUIElementTypeButton>
+                      </XCUIElementTypeOther>
+                    </XCUIElementTypeOther>
+                  </XCUIElementTypeOther>
+                </XCUIElementTypeOther>
+              </XCUIElementTypeOther>
+              <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="false" accessible="false" x="0" y="0" width="402" height="874" index="1" traits="">
+                <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="false" accessible="false" x="0" y="0" width="402" height="874" index="0" traits=""/>
+              </XCUIElementTypeOther>
+            </XCUIElementTypeOther>
+            <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="false" accessible="false" x="171" y="421" width="60" height="60" index="1" traits="">
+              <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="false" accessible="false" x="171" y="421" width="60" height="60" index="0" traits=""/>
+            </XCUIElementTypeOther>
+          </XCUIElementTypeOther>
+        </XCUIElementTypeOther>
+      </XCUIElementTypeOther>
+    </XCUIElementTypeOther>
+  </XCUIElementTypeWindow>
+</XCUIElementTypeApplication>
+
