@@ -202,10 +202,11 @@ class AudioHandler:
         
         # 디바이스 내부 저장소로 전송
         remote_path = "/sdcard/Download/test_audio.wav"
-        cmd = f"adb -s {device_udid} push {audio_file} {remote_path}"
-        
-        result = os.system(cmd)
-        if result == 0:
+        result = subprocess.run(
+            ['adb', '-s', device_udid, 'push', audio_file, remote_path],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
             print(f"✅ 전송 완료: {remote_path}")
             return remote_path
         else:
@@ -266,15 +267,15 @@ class DeviceAudioPlayer:
             
             # ADB shell command로 재생
             udid = driver.capabilities.get('udid')
-            
+
             # MediaPlayer 사용
-            play_cmd = f"""
-            adb -s {udid} shell am start -a android.intent.action.VIEW \
-                -d file://{audio_file_path} \
-                -t audio/wav
-            """
-            
-            os.system(play_cmd)
+            subprocess.run(
+                ['adb', '-s', udid, 'shell', 'am', 'start',
+                 '-a', 'android.intent.action.VIEW',
+                 '-d', f'file://{audio_file_path}',
+                 '-t', 'audio/wav'],
+                capture_output=True, text=True
+            )
             print("✅ Android 재생 시작")
             return True
             
@@ -434,8 +435,10 @@ class DeviceAudioPlayer:
         try:
             udid = driver.capabilities.get('udid')
             # 미디어 정지
-            stop_cmd = f"adb -s {udid} shell input keyevent 86"  # KEYCODE_MEDIA_STOP
-            os.system(stop_cmd)
+            subprocess.run(
+                ['adb', '-s', udid, 'shell', 'input', 'keyevent', '86'],
+                capture_output=True, text=True
+            )  # KEYCODE_MEDIA_STOP
             print("⏹️ Android 재생 정지")
         except Exception as e:
             print(f"⚠️ 정지 실패: {e}")

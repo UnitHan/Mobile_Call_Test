@@ -10,6 +10,8 @@ interface DeviceSectionProps {
   onDisconnectAndroid: () => void;
   onRefreshAndroid: () => void;
   onCheckIphone: () => void;
+  onRefreshIos: () => void;
+  androidDevices?: DeviceInfo[];
   iosDevices: DeviceInfo[];
   onInstallWda: (udid: string | null) => void;
   watchdogRunning: boolean;
@@ -25,6 +27,8 @@ export function DeviceSection({
   onDisconnectAndroid,
   onRefreshAndroid,
   onCheckIphone,
+  onRefreshIos,
+  androidDevices = [],
   iosDevices,
   onInstallWda,
   watchdogRunning,
@@ -84,6 +88,19 @@ export function DeviceSection({
           ↺
         </button>
       </div>
+      {/* 현재 인식된 Android 디바이스 표시 */}
+      {androidDevices.length > 0 && (
+        <div style={{ marginTop: 4, paddingLeft: 2 }}>
+          {androidDevices.map((d) => (
+            <div key={d.udid} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: "var(--text-dim)" }}>
+              <span style={{ color: "#4ade80", fontSize: "0.72rem" }}>●</span>
+              <span style={{ fontFamily: "monospace" }}>{d.udid}</span>
+              <span style={{ color: "var(--text-dim)" }}>—</span>
+              <span>{d.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 하단 영역: 왼쪽 버튼들 + 오른쪽 배너 */}
       <div className="device-lower">
@@ -114,6 +131,13 @@ export function DeviceSection({
             <span className="device-tag ios">iPhone</span>
             <button className="btn-xs btn-accent" onClick={onCheckIphone}>
               {t("device.checkIphone")}
+            </button>
+            <button
+              className="btn-xs btn-ghost"
+              onClick={onRefreshIos}
+              title="iOS 기기 목록 새로고침"
+            >
+              ↺
             </button>
           </div>
 

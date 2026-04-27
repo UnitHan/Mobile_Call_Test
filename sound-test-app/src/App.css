@@ -38,8 +38,25 @@ body {
 
 .app-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 0 16px; height: 44px;
+  padding: 0 16px 0 80px; height: 44px;
   background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  /* macOS overlay titlebar: 신호등 버튼 영역 확보 */
+  user-select: none;
+  -webkit-app-region: drag;
+}
+/* 헤더/탭 안의 인터랙티브 요소는 드래그 영역 제외 */
+.app-header select,
+.app-header button,
+.app-header input,
+.app-header a {
+  -webkit-app-region: no-drag;
+}
+/* 신호등 버튼 오른쪽 빈 드래그 핸들 (12px 확보) */
+.drag-handle {
+  display: block;
+  width: 12px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
 }
 .app-title { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; white-space: nowrap; }
 .app-status-msg {
@@ -133,6 +150,49 @@ button { cursor: pointer; font-family: inherit; }
 .btn-xs.btn-danger:hover:not(:disabled) { background: #5a1f1f; }
 .btn-xs.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
 .btn-xs.btn-ghost:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+
+/* btn-sm: btn-xs보다 조금 큰 버튼 (설정 모달 저장 등에 사용) */
+.btn-sm {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 16px;
+  font-size: 13px; font-weight: 600; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted);
+  white-space: nowrap; transition: background 0.15s, color 0.15s; flex-shrink: 0; cursor: pointer;
+}
+.btn-sm:hover:not(:disabled) { background: #2d333b; color: var(--text); }
+.btn-sm:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-sm.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.btn-sm.btn-accent:hover:not(:disabled) { background: #2f7de0; border-color: #2f7de0; }
+.btn-sm.btn-accent:disabled { background: var(--accent-dim); border-color: var(--border); color: var(--text-muted); }
+
+/* 오디오 인터페이스 탭 카드 */
+.audio-iface-card {
+  background: var(--bg-card, #1e1e2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 0.88em;
+}
+.audio-iface-name { font-weight: 600; margin-bottom: 2px; font-family: inherit; }
+.audio-iface-detail { color: var(--text-dim); font-family: monospace; font-size: 0.93em; line-height: 1.6; }
+.audio-iface-msg {
+  margin-top: 10px; padding: 7px 12px; border-radius: 5px; font-size: 0.88em;
+}
+.audio-iface-msg.ok { background: rgba(76,175,80,0.15); color: #81c784; }
+.audio-iface-msg.err { background: rgba(244,67,54,0.15); color: #e57373; }
+
+/* 슬롯 할당 행 */
+.audio-slot-row {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.audio-slot-label { display: flex; flex-direction: column; gap: 3px; }
+.audio-slot-select { width: 100%; min-width: 0; }
 
 .device-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; flex-shrink: 0; }
 .device-tag.android { background: #1a3320; color: #4caf50; border: 1px solid #2a5032; }
@@ -419,6 +479,12 @@ button { cursor: pointer; font-family: inherit; }
   display: flex; align-items: center; gap: 2px;
   padding: 0 12px; height: 36px;
   background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+/* 탭 버튼은 드래그 제외 */
+.tab-btn,
+.tab-strip button {
+  -webkit-app-region: no-drag;
 }
 .tab-btn {
   display: inline-flex; align-items: center; gap: 6px;

@@ -206,9 +206,9 @@ class TestListUsbStatus:
              patch('sounddevice.query_devices', return_value=devices):
             from usb_audio_devices import list_usb_status
             result = list_usb_status(verbose=False)
-        assert 'output_indices' in result
-        assert 'input_indices' in result
-        assert 'location_ids' in result
+        assert 'output_map' in result
+        assert 'input_map' in result
+        assert 'ioreg_devs' in result
 
     def test_verbose_mode_prints_output(self, capsys):
         devices = _make_sd_devices(usb_count=1)

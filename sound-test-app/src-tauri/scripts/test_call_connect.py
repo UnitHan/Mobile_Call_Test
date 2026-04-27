@@ -363,11 +363,11 @@ def create_ios_driver(appium_port: int) -> webdriver.Remote:
     }
     if wda_url:
         caps['appium:webDriverAgentUrl'] = wda_url
-        caps['appium:usePrebuiltWDA'] = True
+        caps['appium:usePreinstalledWDA'] = True
         caps['appium:useNewWDA'] = False
         print(f"  WDA 재사용: {wda_url}")
     else:
-        caps['appium:usePrebuiltWDA'] = True
+        caps['appium:usePreinstalledWDA'] = True
         caps['appium:useNewWDA'] = False
         caps['appium:updatedWDABundleId'] = 'com.jjun.1.WebDriverAgentRunner'
         caps['appium:wdaLaunchTimeout'] = 180000

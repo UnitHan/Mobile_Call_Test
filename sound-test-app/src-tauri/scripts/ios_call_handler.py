@@ -847,4 +847,30 @@ class IosCallHandlerMixin:
         통화 연결 후에는 '보이는 전화' 팝업(_tap_video_call_popup)만 처리하면 됨.
         """
         print(f"   ℹ️ force_ios_external_mic: CONNECT 6 환경 — 스피커 버튼 탭 비활성화 (스킵)")
+
+        # ── iOS 수화기 통화 볼륨 자동 설정 ──────────────────────────────
+        try:
+            from config import IOS_CALL_VOLUME as _vol_target
+        except ImportError:
+            _vol_target = None
+
+        if _vol_target is not None:
+            driver = self.drivers.get('speaker1')  # type: ignore[attr-defined]
+            if driver:
+                _MAX_STEPS = 16  # iPhone 통화 볼륨 최대 단계
+                _target_steps = max(0, min(_MAX_STEPS, round(float(_vol_target) * _MAX_STEPS)))
+                print(f"   🔊 iOS 통화 볼륨 설정: {float(_vol_target)*100:.0f}% ({_target_steps}/{_MAX_STEPS}단계)")
+                try:
+                    # 1) 최대로 올리기 (현재 레벨 불확실하므로)
+                    for _ in range(_MAX_STEPS):
+                        driver.execute_script('mobile: pressButton', {'name': 'volumeup'})
+                        time.sleep(0.08)
+                    # 2) 목표 단계만큼 내리기
+                    _down = _MAX_STEPS - _target_steps
+                    for _ in range(_down):
+                        driver.execute_script('mobile: pressButton', {'name': 'volumedown'})
+                        time.sleep(0.08)
+                    print(f"   ✅ iOS 통화 볼륨 조정 완료 (↑{_MAX_STEPS}→↓{_down})")
+                except Exception as _e:
+                    print(f"   ⚠️ iOS 통화 볼륨 조정 실패: {_e}")
         return

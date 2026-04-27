@@ -296,25 +296,18 @@ class AppiumDeviceSetup:
                 iphone_ip = wdm.get_iphone_ip(udid=device_udid) if wdm else None
                 wda_url = wdm.find_wda_url(iphone_ip, udid=device_udid) if (wdm and iphone_ip) else None
 
-                # ── 연결 사전 검증: iPhone 감지 실패 ───────────────────────────
-                if not iphone_ip:
+                if not iphone_ip and not wda_url:
                     print(
-                        f"[DEVICE_ALERT] iPhone을 찾을 수 없습니다 (UDID: {device_udid[:8]}...). "
-                        "iPhone을 USB로 연결하고 화면의 '신뢰' 버튼을 눌러주세요."
+                        f"  ℹ️  iPhone IP 미감지 (UDID: {device_udid[:8]}...) — "
+                        "usePreinstalledWDA 모드로 Appium이 WDA 직접 기동합니다."
                     )
-                    return None, None, None
 
-                if not wda_url:
-                    print(f"  🔄 WDA 재기동 시도 (IP={iphone_ip})...")
+                if not wda_url and iphone_ip:
+                    # WDA 실행 안 됨 → devicectl로 기동 (1회)
+                    print(f"  🔌 WDA 기동 시도 (devicectl, IP={iphone_ip})...")
                     wda_url = wdm.launch_wda_via_devicectl(device_udid, iphone_ip)
                     if not wda_url:
-                        # WDA 완전 기동 실패 → 루프 방지, 사용자에게 알림 후 조기 종료
-                        print(
-                            f"[DEVICE_ALERT] iPhone WDA 앱을 시작할 수 없습니다 "
-                            f"(UDID: {device_udid[:8]}...). "
-                            "Xcode에서 WebDriverAgent 빌드를 아이폰에 다시 설치한 후 재시도하세요."
-                        )
-                        return None, None, None
+                        print(f"  ⚠️  devicectl WDA 기동 실패 → usePreinstalledWDA로 Appium에 위임")
 
                 device_config = {
                     'platformName': 'iOS',
@@ -332,7 +325,7 @@ class AppiumDeviceSetup:
                     print(f"  ✅ 실행 중인 WDA 재사용: {wda_url}")
                 else:
                     device_config.update({
-                        'appium:usePrebuiltWDA': True,
+                        'appium:usePreinstalledWDA': True,   # xcodebuild 없이 설치된 WDA 직접 기동
                         'appium:useNewWDA': False,
                         'appium:updatedWDABundleId': 'com.jjun.1.WebDriverAgentRunner',
                         'appium:wdaLaunchTimeout': 180000,

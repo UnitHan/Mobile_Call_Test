@@ -15,6 +15,14 @@ import sys
 import tempfile
 import time
 
+try:
+    import config as _cfg
+    _WDA_EXTRA_SUBNETS: list = getattr(_cfg, 'WDA_SUBNETS', []) or []
+    _WDA_SCAN_TIMEOUT: float = getattr(_cfg, 'WDA_SCAN_TIMEOUT', 1.5)
+except ImportError:
+    _WDA_EXTRA_SUBNETS = []
+    _WDA_SCAN_TIMEOUT = 1.5
+
 _TMP = tempfile.gettempdir()
 
 
@@ -29,7 +37,18 @@ class IosWdaManager:
     """iPhone WDA URL 감지·기동·정리를 담당하는 단일 책임 클래스."""
 
     def __init__(self, wda_port: int = 8100):
-        self._cached_iphone_ip: str | None = None
+        # config.py의 WDA_IP_OVERRIDE가 있으면 초기 캐시로 사용
+        try:
+            import config as _cfg
+            override = getattr(_cfg, 'WDA_IP_OVERRIDE', None)
+            bonjour_host = getattr(_cfg, 'IPHONE_BONJOUR_HOST', None) or None
+        except ImportError:
+            override = None
+            bonjour_host = None
+        self._cached_iphone_ip: str | None = override or None
+        # dns-sd에 사용할 Bonjour 호스트명 캐시 (예: "iPhone-17-Pro.local")
+        # → 한 번 성공하면 저장, 다음 실행에서 devicectl 없이 바로 dns-sd 조회
+        self._cached_bonjour_host: str | None = bonjour_host
         self.wda_port = wda_port
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -104,12 +123,97 @@ class IosWdaManager:
             except Exception as e:
                 print(f"  ⚠️ devicectl tunnelIP 조회 실패: {e}")
 
-        # ── 2. 서브넷 병렬 스캔 ──────────────────────────────────────────
+        # ── 1-b. dns-sd로 Wi-Fi IP 조회 (WDA 불필요) ─────────────────────────────
+        # 캐시된 Bonjour 호스트명이 있으면 devicectl 없이 바로 조회 (빠른 경로).
+        # 없으면 devicectl potentialHostnames에서 .coredevice.local → .local 변환.
+        import re as _re2
+
+        def _dns_sd_resolve(local_h: str) -> str | None:
+            """dns-sd -G v4로 사설 IP를 반환. 없으면 None."""
+            try:
+                dr = subprocess.run(
+                    ['dns-sd', '-G', 'v4', local_h],
+                    capture_output=True, timeout=5,
+                )
+                out = (dr.stdout or b'').decode(errors='ignore')
+            except subprocess.TimeoutExpired as te:
+                out = (te.stdout or b'').decode(errors='ignore')
+            except Exception:
+                return None
+            for m in _re2.finditer(r'(\d+\.\d+\.\d+\.\d+)', out):
+                ip = m.group(1)
+                parts = ip.split('.')
+                if (ip.startswith('192.168.')
+                        or ip.startswith('10.')
+                        or (ip.startswith('172.') and 16 <= int(parts[1]) <= 31)):
+                    return ip
+            return None
+
+        # 빠른 경로: 이전에 성공한 Bonjour 호스트명 재사용
+        if self._cached_bonjour_host:
+            ip = _dns_sd_resolve(self._cached_bonjour_host)
+            if ip:
+                print(f"  📡 iPhone Wi-Fi IP (dns-sd 캐시): {ip}")
+                self._cached_iphone_ip = ip
+                return ip
+            print(f"  ℹ️  dns-sd 캐시 호스트({self._cached_bonjour_host}) 응답 없음 → devicectl 재조회")
+
+        # 느린 경로: devicectl에서 Bonjour 호스트명 획득 후 dns-sd 조회
+        if udid:
+            try:
+                tmp = os.path.join(_TMP, '_devicectl_ip.json')
+                r = subprocess.run(
+                    ['xcrun', 'devicectl', 'list', 'devices', '--json-output', tmp],
+                    capture_output=True, timeout=8
+                )
+                if r.returncode == 0:
+                    with open(tmp) as f:
+                        data = _json.load(f)
+                    for dev in data.get('result', {}).get('devices', []):
+                        hw = dev.get('hardwareProperties', {})
+                        if hw.get('udid', '') != udid:
+                            continue
+                        conn = dev.get('connectionProperties', {})
+                        hostnames = conn.get('potentialHostnames', conn.get('localHostnames', []))
+                        for h in hostnames:
+                            if not h.endswith('.coredevice.local'):
+                                continue
+                            local_h = h[:-len('.coredevice.local')] + '.local'
+                            ip = _dns_sd_resolve(local_h)
+                            if ip:
+                                print(f"  📡 iPhone Wi-Fi IP (dns-sd): {ip}")
+                                self._cached_iphone_ip = ip
+                                self._cached_bonjour_host = local_h  # ← 다음 호출에서 재사용
+                                return ip
+                        break  # UDID 매칭 완료
+                else:
+                    print(f"  ⚠️ devicectl list 실패 (returncode={r.returncode})")
+            except Exception as e:
+                print(f"  ⚠️ dns-sd IP 조회 실패: {e}")
+
+        # ── 1-c. 캐시 IP에 ping → arp에서 MAC 확보 후 재검증 (WDA 불필요) ──────
+        # WDA_IP_OVERRIDE나 이전 세션 캐시 IP가 있으면 ping으로 arp를 갱신하고
+        # 해당 IP가 현재 네트워크에 살아있는지 확인한다.
+        if self._cached_iphone_ip:
+            cached_ip = self._cached_iphone_ip
+            try:
+                ping_r = subprocess.run(
+                    ['ping', '-c', '1', '-W', '1000', cached_ip],
+                    capture_output=True, timeout=3
+                )
+                if ping_r.returncode == 0:
+                    print(f"  📡 iPhone IP (ping 생존 확인): {cached_ip}")
+                    return cached_ip
+            except Exception:
+                pass
+
+        # ── 2. 서브넷 병렬 스캔 (WDA 실행 중일 때만 성공) ────────────────
         cached = self._cached_iphone_ip
         subnets: list[str] = []
         if cached and '.' in str(cached):
             subnets.append(str(cached).rsplit('.', 1)[0])
-        subnets += ['192.168.219', '192.168.0', '192.168.1', '10.0.0', '172.16.0']
+        _default_subnets = ['192.168.219', '192.168.0', '192.168.1', '10.0.0', '172.16.0']
+        subnets = _WDA_EXTRA_SUBNETS + subnets + [s for s in _default_subnets if s not in _WDA_EXTRA_SUBNETS]
         seen: set[str] = set()
         ordered_subnets = []
         for s in subnets:
@@ -119,7 +223,7 @@ class IosWdaManager:
 
         def probe(ip: str) -> str | None:
             try:
-                with urllib.request.urlopen(f'http://{ip}:8100/status', timeout=1.5) as r:
+                with urllib.request.urlopen(f'http://{ip}:8100/status', timeout=_WDA_SCAN_TIMEOUT) as r:
                     data = _json.loads(r.read())
                     val = data.get('value', data)
                     if val.get('ready') or val.get('state') == 'success':
@@ -195,7 +299,7 @@ class IosWdaManager:
         """
         import urllib.request, json as _json
         host = _ip_host(iphone_ip)
-        for port in [8100, 8200, 27753]:
+        for port in [8110, 8100, 8200, 27753]:
             try:
                 url = f'http://{host}:{port}/status'
                 with urllib.request.urlopen(url, timeout=2) as r:
@@ -226,9 +330,9 @@ class IosWdaManager:
             except Exception:
                 continue
         if udid and iphone_ip:
-            print(f"  📡 WDA 없음 → devicectl로 WDA 직접 기동 시도...")
-            return self.launch_wda_via_devicectl(udid, iphone_ip)
-        print(f"  ⚠️ 실행 중인 WDA 없음 → Appium이 직접 시작")
+            print(f"  ⚠️ 실행 중인 WDA 없음 (udid={udid[:8]}...)")
+        else:
+            print(f"  ⚠️ 실행 중인 WDA 없음 → Appium이 직접 시작")
         return None
 
     def launch_wda_via_devicectl(self, udid: str, iphone_ip: str) -> str | None:
@@ -240,45 +344,60 @@ class IosWdaManager:
             return self._launch_wda_via_tidevice(udid, iphone_ip)
 
         try:
-            tmp = os.path.join(_TMP, '_devicectl_wda.json')
-            subprocess.run(
-                ['xcrun', 'devicectl', 'list', 'devices', '--json-output', tmp],
-                capture_output=True, timeout=8
+            # xcodebuild test-without-building 방식: XCTest 런너를 올바르게 기동하여
+            # WDA HTTP 서버(USE_PORT)가 시작되도록 함.
+            # devicectl process launch는 XCTest 환경변수(USE_PORT 등)를 전달하지 못해
+            # WDA HTTP 서버가 뜨지 않음.
+            import glob as _glob
+
+            # xctestrun 파일 탐색 (DerivedData)
+            xctestrun_pattern = os.path.expanduser(
+                '~/Library/Developer/Xcode/DerivedData/WebDriverAgent-*/Build/Products/*.xctestrun'
             )
-            device_uuid = None
-            try:
-                with open(tmp) as f:
-                    data = _json.load(f)
-                for dev in data.get('result', {}).get('devices', []):
-                    if dev.get('hardwareProperties', {}).get('udid', '') == udid:
-                        device_uuid = dev.get('identifier', '')
-                        break
-            except Exception as e:
-                print(f"  ⚠️ devicectl JSON 파싱 실패: {e}")
-            if not device_uuid:
-                print(f"  ⚠️ devicectl UUID 조회 실패 (udid={udid})")
+            xctestrun_files = sorted(_glob.glob(xctestrun_pattern), key=os.path.getmtime, reverse=True)
+            if not xctestrun_files:
+                print(f"  ⚠️ xctestrun 파일 없음 (Xcode에서 WDA 한번 빌드 필요)")
                 return None
-            bundle_id = 'com.jjun.1.WebDriverAgentRunner'
-            print(f"  🚀 WDA 앱 실행 중 (devicectl uuid={device_uuid[:8]}...)...")
+            xctestrun = xctestrun_files[0]
+
+            # xctestrun에서 USE_PORT 읽기
+            import plistlib as _plist
+            wda_port = self.wda_port
+            try:
+                with open(xctestrun, 'rb') as _f:
+                    _xt = _plist.load(_f)
+                for _tgt, _vals in _xt.items():
+                    if _tgt.startswith('__'):
+                        continue
+                    _use_port = _vals.get('EnvironmentVariables', {}).get('USE_PORT', '')
+                    if _use_port:
+                        wda_port = int(_use_port)
+                        break
+            except Exception:
+                pass
+
+            host = _ip_host(iphone_ip)
+            print(f"  🚀 WDA 기동 (xcodebuild test-without-building, port={wda_port})...")
             subprocess.Popen(
-                ['xcrun', 'devicectl', 'device', 'process', 'launch',
-                 '--device', device_uuid, bundle_id],
+                ['xcodebuild', 'test-without-building',
+                 '-xctestrun', xctestrun,
+                 '-destination', f'id={udid}'],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
-            host = _ip_host(iphone_ip)
-            for i in range(30):
+            for i in range(60):
                 time.sleep(1)
                 try:
-                    url = f'http://{host}:8100/status'
+                    url = f'http://{host}:{wda_port}/status'
                     with urllib.request.urlopen(url, timeout=1) as r:
                         if r.status == 200:
-                            print(f"  ✅ WDA 시작 완료 ({i+1}초 소요): http://{host}:8100")
+                            print(f"  ✅ WDA 시작 완료 ({i+1}초 소요): http://{host}:{wda_port}")
                             self._cached_iphone_ip = iphone_ip
-                            return f'http://{host}:8100'
+                            self.wda_port = wda_port
+                            return f'http://{host}:{wda_port}'
                 except Exception:
                     if (i + 1) % 5 == 0:
                         print(f"  ⏳ WDA 대기 중... ({i+1}초)")
-            print(f"  ⚠️ WDA 시작 타임아웃 (30초)")
+            print(f"  ⚠️ WDA 시작 타임아웃 (60초)")
         except Exception as e:
             print(f"  ⚠️ WDA 실행 실패: {e}")
         return None

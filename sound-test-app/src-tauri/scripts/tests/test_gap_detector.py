@@ -78,9 +78,9 @@ class TestFindOffsetFrames:
 
     def test_zero_offset_same_signal(self):
         """동일 신호 → 오프셋 0 반환."""
-        audio = _tone(440, 3.0)
-        db, _ = self._make_db_profile(audio)
-        offset = find_offset_frames(db, db, max_offset_frames=50)
+        sr = 16000
+        audio = _tone(440, 3.0, sr)
+        offset = find_offset_frames(audio, audio, sr=sr)
         assert offset == 0
 
     def test_positive_offset_delayed_test(self):
@@ -90,24 +90,22 @@ class TestFindOffsetFrames:
         # test = 100ms 무음 + ref 신호 (test가 5프레임 늦게 시작)
         test_audio = np.concatenate([_silence(0.1, sr), ref_audio])
 
-        ref_db, frame_sec = self._make_db_profile(ref_audio, sr)
-        test_db, _ = self._make_db_profile(test_audio, sr)
-        offset = find_offset_frames(ref_db, test_db, max_offset_frames=20)
+        offset = find_offset_frames(ref_audio, test_audio, sr=sr, max_offset_sec=0.5)
         # test가 늦게 시작 → detect_gaps_envelope에서 test_a = test_db[-offset:] 로 보정됨
         # 반환값이 0 이하 (test 지연)
         assert offset <= 0, f"expected offset <= 0 for delayed test, got {offset}"
 
     def test_returns_integer(self):
         """반환값이 int 타입이어야 한다."""
-        audio = _tone(440, 2.0)
-        db, _ = self._make_db_profile(audio)
-        result = find_offset_frames(db, db, max_offset_frames=10)
+        sr = 16000
+        audio = _tone(440, 2.0, sr)
+        result = find_offset_frames(audio, audio, sr=sr)
         assert isinstance(result, int)
 
     def test_short_signal_no_crash(self):
         """짧은 신호에서도 크래시 없이 동작해야 한다."""
-        db = np.array([-50.0, -45.0, -40.0, -45.0, -50.0], dtype=np.float32)
-        result = find_offset_frames(db, db, max_offset_frames=2)
+        audio = np.array([0.1, 0.2, 0.0, -0.1, 0.05], dtype=np.float32)
+        result = find_offset_frames(audio, audio, sr=16000, max_offset_sec=0.001)
         assert isinstance(result, int)
 
 

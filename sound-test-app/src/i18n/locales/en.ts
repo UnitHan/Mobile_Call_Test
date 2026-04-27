@@ -2,7 +2,7 @@ import type { Translations } from "./ko";
 
 export const en: Translations = {
   app: {
-    title: "ixi-O Call Test",
+    title: "ixi-O Voice Call Test Automation",
     homeTab: "Home",
     dashTab: "Test Results",
     scheduleTab: "Scheduled Tests",
@@ -226,6 +226,7 @@ export const en: Translations = {
       profile: "Audio Profiles",
       script: "Script",
       device: "Device/Audio",
+      audioInterface: "Audio Interface",
       recording: "Recording Mode",
       notice: "Notices",
       license: "Open Source",
@@ -306,6 +307,23 @@ export const en: Translations = {
       s1OutputPairHint: "Speaker 1 CONNECT 6 output",
       s2OutputPairHint: "Speaker 2 CONNECT 6 output",
       udidPlaceholder: "Enter UDID directly",
+    },
+    audioInterfaceTab: {
+      desc: "Lock the roles of CONNECT 6 × 2 units.",
+      descHint: "Device indices may change after swapping USB ports or restarting Mac. Scan and select slots — settings are saved automatically.",
+      connectedTitle: "🔌 Connected Audio Interfaces",
+      rescan: "Rescan",
+      scanning: "Scanning…",
+      noDevice: "No USB audio devices connected.",
+      slotTitle: "📋 Slot Assignment",
+      androidSlot: "🤖 Android Slot",
+      androidHint: "CONNECT 6 connected to Android device",
+      iosSlot: "🍎 iOS Slot",
+      iosHint: "CONNECT 6 connected to iPhone",
+      selectPlaceholder: "— Select —",
+      saving: "Saving…",
+      autoSaved: "Auto-saved",
+      errDuplicate: "Cannot assign the same device to both Android and iOS.",
     },
     recordingTab: {
       desc: "Select how to save call audio.",

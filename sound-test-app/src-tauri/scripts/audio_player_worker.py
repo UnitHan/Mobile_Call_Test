@@ -89,6 +89,7 @@ def play(
 
         # ── 장치 조회 및 USB 여부 검증 ──────────────────────────────────────
         if device is not None:
+            from usb_audio_devices import get_usb_audio_output_indices
             dev_info = sd.query_devices(device, 'output')
             dev_name: str = dev_info['name']
             is_usb = 'USB' in dev_name or 'CONNECT 6' in dev_name

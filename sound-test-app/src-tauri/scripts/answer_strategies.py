@@ -245,10 +245,24 @@ class AnswerStrategiesMixin:
         return False
 
     def _answer_strategy_coordinate_tap(self, driver, start_time: float) -> bool:
-        """수신 전략 4: accessible=false 하이브리드 앱 대응 — 좌표 탭."""
+        """수신 전략 4: accessible=false 하이브리드 앱 대응 — 좌표 탭.
+
+        주의: 수신 화면 확인 없이 탭하면 키패드 화면에서 발신 오동작 발생.
+        page_source에 수신 UI 키워드가 있을 때만 탭한다.
+        """
         elapsed = time.time() - start_time
         if elapsed < 3:
             return False
+
+        # 수신 화면 확인 — 키워드 없으면 탭 안 함
+        try:
+            src = driver.page_source
+        except Exception:
+            return False
+        _incoming_kws = ["받기", "응답", "수락", "거절", "Decline", "Accept", "전화 수신", "수신 중", "incoming"]
+        if not any(kw in src for kw in _incoming_kws):
+            return False
+
         # 익시오 '받기' 버튼 bounds: [282, 720, 70, 70] → center (317, 755)
         tap_candidates = [(317, 755), (290, 720), (195, 720), (195, 680)]
         for tx, ty in tap_candidates:

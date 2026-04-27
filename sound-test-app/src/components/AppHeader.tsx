@@ -110,8 +110,8 @@ export function AppHeader({
   };
 
   return (
-    <header className="app-header">
-      <span className="app-title">{t("app.title")}</span>
+    <header className="app-header" data-tauri-drag-region>
+      <span className="drag-handle" data-tauri-drag-region />
       <span className="app-status-msg" title={statusMessage}>
         {isRunning && <span className="status-tag tag-running">{t("header.statusRunning")}</span>}
         {isDone && <span className="status-tag tag-done">{t("header.statusDone")}</span>}

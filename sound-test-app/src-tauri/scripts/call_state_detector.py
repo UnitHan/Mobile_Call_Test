@@ -36,7 +36,7 @@ class CallStateDetector:
                     if element:
                         print("✅ Android 통화 활성 감지!")
                         return True
-                except:
+                except Exception:
                     continue
             
             # ADB로 통화 상태 확인
@@ -48,7 +48,8 @@ class CallStateDetector:
                 text=True
             )
             
-            if 'mCallState=2' in result.stdout:  # 2 = OFFHOOK (통화 중)
+            import re as _re
+            if _re.search(r'mCallState[=:]\s*2', result.stdout):  # 2 = OFFHOOK (통화 중), Samsung Android 16: 'mCallState: 2' 형식 대응
                 print("✅ Android 통화 활성 (ADB 확인)")
                 return True
             
@@ -87,7 +88,7 @@ class CallStateDetector:
                     if element:
                         print("✅ iOS 통화 활성 감지!")
                         return True
-                except:
+                except Exception:
                     continue
             
             print("⚠️ iOS 통화 상태 확인 불가")
@@ -141,7 +142,7 @@ class CallStateDetector:
             duration = duration_element.text
             print(f"⏱️ 통화 시간: {duration}")
             return duration
-        except:
+        except Exception:
             return "00:00"
     
     @staticmethod
@@ -157,6 +158,6 @@ class CallStateDetector:
                 duration = duration_elements[0].text
                 print(f"⏱️ 통화 시간: {duration}")
                 return duration
-        except:
+        except Exception:
             pass
         return "00:00"

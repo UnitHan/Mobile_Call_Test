@@ -98,8 +98,8 @@ export function ResultDetailModal({ result, onClose }: Props) {
             <div className="modal-section-title">{t("result.mosSection")}</div>
             {(() => {
               const isRev = result.tcId === "TC_02" || result.tcId === "TC_04";
-              const label1 = isRev ? "[Android] ViSQOL MOS" : "[iOS] ViSQOL MOS";
-              const label2 = isRev ? "[iOS] ViSQOL MOS" : "[Android] ViSQOL MOS";
+              const label1 = isRev ? "[iOS] ViSQOL MOS" : "[Android] ViSQOL MOS";
+              const label2 = isRev ? "[Android] ViSQOL MOS" : "[iOS] ViSQOL MOS";
               const val1 = isRev ? result.androidVisqolMos : result.iosVisqolMos;
               const val2 = isRev ? result.iosVisqolMos : result.androidVisqolMos;
               return (

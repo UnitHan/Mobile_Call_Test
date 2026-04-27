@@ -50,7 +50,7 @@ def create_driver():
         'appium:shouldTerminateApp': False,
         'appium:waitForQuiescence': False,
         'appium:webDriverAgentUrl': WDA_URL,
-        'appium:usePrebuiltWDA': True,
+        'appium:usePreinstalledWDA': True,
         'appium:useNewWDA': False,
     }
     options = AppiumOptions()

@@ -18,8 +18,8 @@ export interface AudioProfile {
   speaker1AudioFile: string;
   speaker2AudioFile: string;
   // 정답지 (화자별 분리)
-  refAudioPathS1: string;  // 화자1 정답지 — S1이 재생한 음원의 원본 (iOS 수신 녹음의 비교 기준)
-  refAudioPathS2: string;  // 화자2 정답지 — S2가 재생한 음원의 원본 (Android 수신 녹음의 비교 기준)
+  refAudioPathS1: string;  // S1(철수/SPEAKER_00) 음원 — TC_01/03에서 Android 수신 녹음의 비교 기준
+  refAudioPathS2: string;  // S2(영희/SPEAKER_01) 음원 — TC_01/03에서 iOS 수신 녹음의 비교 기준
   /** @deprecated 하위호환용 — S1/S2 미설정 시 양쪽 공통 정답지로 폴백 */
   refAudioPath?: string;
   scriptPath: string;   // 대본 .txt 파일 경로

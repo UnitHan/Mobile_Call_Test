@@ -16,9 +16,9 @@ CONNECT 6 × 2대 듀얼 장치 직접 녹음 모듈.
   2. 각 스트림에서 ch4-5(Mobile In) 캡처
   3. stop() 시 재생 시작 시점 기준 앞/뒤 트리밍 후 모노 WAV 저장
 
-파일명 형식: {platform}_ixiO_{YYYYMMDD_HHMMSS}.wav
-  예) iOS_ixiO_20260324_143000.wav
-      Android_ixiO_20260324_143000.wav
+파일명 형식: {수신플랫폼}_{앱명}_{YYYYMMDD_HHMMSS}.wav  (수신단 기준 — MOS 주체)
+  예) Android_ixiO_20260324_143000.wav ← Android가 수신한 음성 (CONNECT6#1 Android수신 녹음)
+      iOS_ixiO_20260324_143000.wav     ← iOS가 수신한 음성 (CONNECT6#2 iPhone수신 녹음)
 
 사용 예:
     from mixer_recorder import MixerRecorder
@@ -373,9 +373,9 @@ class MixerRecorder:
     def stop(self) -> dict[str, Optional[Path]]:
         """녹음 중단 → iOS / Android 각각 모노 WAV 저장.
 
-        파일명 규칙: 발화자 기준
-          - CONNECT 6 #1(Android) Mobile In 캡처 = Android가 수신한 상대방 음성 → Android_*.wav
-          - CONNECT 6 #2(iOS) Mobile In 캡처 = iPhone이 수신한 상대방 음성 → iOS_*.wav
+        파일명 규칙: 수신단 기준 (─ MOS 주체 = 수신한 단말)
+          - CONNECT 6 #1(android_a) Mobile In 캡처 = Android가 수신 → Android_*.wav
+          - CONNECT 6 #2(ios_b) Mobile In 캡처 = iPhone이 수신 → iOS_*.wav
 
         Returns:
             {'ios': Path | None, 'android': Path | None}
@@ -460,7 +460,8 @@ class MixerRecorder:
         if g_ios != 1.0 or g_android != 1.0:
             print(f"🔊 [MixerRecorder] 게인: Android(MobileIn)={g_android:.2f}x, iOS(MobileIn)={g_ios:.2f}x", flush=True)
 
-        # ── CONNECT 6 #1 → Android_*.wav ─────────────────────────────────────
+        # ── CONNECT 6 #1 (android_a) → Android_*.wav ─────────────────────────────
+        # Android 단말이 수신한 음성 → 수신단(Android) 기준 파일명 Android_
         if self._chunks:
             raw_android = np.concatenate(self._chunks, axis=0)
             if raw_android.shape[1] > max(self._android_channels):
@@ -482,14 +483,15 @@ class MixerRecorder:
                 path = self._output_dir / f"Android_{self._app_name}{carrier}{tc_tag}_{ts}.wav"
                 _save_mono_wav(path, android_audio, self._sr, tc_type=self._tc_type)
                 dur = len(android_audio) / self._sr
-                print(f"✅ [MixerRecorder] Android 녹음 저장: {path}  ({dur:.1f}s)  src=CONNECT6#1 ch={self._android_channels}", flush=True)
+                print(f"✅ [MixerRecorder] Android 수신 녹음 저장: {path}  ({dur:.1f}s)  src=CONNECT6#1 ch={self._android_channels}", flush=True)
                 result['android'] = path
             else:
                 print(f"⚠️ [MixerRecorder] Android 채널({self._android_channels}) 부족 (열린 채널: {raw_android.shape[1]})", flush=True)
         else:
             print("⚠️ [MixerRecorder] CONNECT 6 #1(Android) 녹음 데이터 없음", flush=True)
 
-        # ── CONNECT 6 #2 → iOS_*.wav ────────────────────────────────────────
+        # ── CONNECT 6 #2 (ios_b) → iOS_*.wav ────────────────────────────────────
+        # iPhone이 수신한 음성 → 수신단(iOS) 기준 파일명 iOS_
         if self._ios_chunks:
             raw_ios = np.concatenate(self._ios_chunks, axis=0)
             if raw_ios.shape[1] > max(self._ios_channels):
@@ -504,6 +506,7 @@ class MixerRecorder:
                 # 재생 끝 이후 무음 트리밍 (뒤)
                 if target_samples is not None and len(ios_audio) > target_samples:
                     ios_audio = ios_audio[:target_samples]
+                _ios_silence_trimmed = 0
                 if g_ios != 1.0:
                     ios_audio = np.clip(ios_audio * g_ios, -1.0, 1.0)
                 tc_tag = f"_{self._tc_type}" if self._tc_type else ''
@@ -511,7 +514,8 @@ class MixerRecorder:
                 path = self._output_dir / f"iOS_{self._app_name}{carrier}{tc_tag}_{ts}.wav"
                 _save_mono_wav(path, ios_audio, self._sr, tc_type=self._tc_type)
                 dur = len(ios_audio) / self._sr
-                print(f"✅ [MixerRecorder] iOS 녹음 저장: {path}  ({dur:.1f}s)  src=CONNECT6#2 ch={self._ios_channels}", flush=True)
+                _silence_info = f"  (앞무음 {_ios_silence_trimmed:.1f}s 제거)" if _ios_silence_trimmed > 0 else ""
+                print(f"✅ [MixerRecorder] iOS 수신 녹음 저장: {path}  ({dur:.1f}s){_silence_info}  src=CONNECT6#2 ch={self._ios_channels}", flush=True)
                 result['ios'] = path
             else:
                 print(f"⚠️ [MixerRecorder] iOS 채널({self._ios_channels}) 부족 (열린 채널: {raw_ios.shape[1]})", flush=True)

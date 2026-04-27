@@ -26,11 +26,35 @@ pub struct ClearFilesResult {
 
 #[tauri::command]
 pub fn clear_result_files(payload: ClearFilesPayload) -> Result<ClearFilesResult, String> {
+    // 허용 루트: ~/Documents/sound/, /tmp/, 시스템 임시 디렉토리
+    let home = std::env::var("HOME").unwrap_or_default();
+    let allowed_roots: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from(&home).join("Documents").join("sound"),
+        std::path::PathBuf::from("/tmp"),
+        std::env::temp_dir(),
+    ];
+    fn is_allowed(p: &Path, roots: &[std::path::PathBuf]) -> bool {
+        if let Ok(canon) = p.canonicalize() {
+            return roots.iter().any(|r| canon.starts_with(r));
+        }
+        // 아직 존재하지 않는 파일은 부모 디렉토리로 체크
+        if let Some(parent) = p.parent() {
+            if let Ok(canon) = parent.canonicalize() {
+                return roots.iter().any(|r| canon.starts_with(r));
+            }
+        }
+        false
+    }
+
     let mut deleted = 0usize;
     let mut failed  = Vec::<String>::new();
 
     for p in &payload.paths {
         let path = Path::new(p);
+        if !is_allowed(path, &allowed_roots) {
+            failed.push(format!("{}: 허용되지 않은 경로", p));
+            continue;
+        }
         if !path.exists() {
             // 이미 없으면 성공으로 처리
             deleted += 1;

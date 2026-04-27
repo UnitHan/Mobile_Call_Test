@@ -107,6 +107,23 @@ class AudioPlaybackMixin:
             s1_volume = playback_volume
             s2_volume = playback_volume
 
+        # Apple 전화 앱 전용 볼륨 오버라이드
+        # com.apple.mobilephone 은 통화 코덱 게인이 높아 동일 레벨에서 클리핑 발생
+        _ios_bundle = getattr(self, 'ios_app_bundle_id', '')  # type: ignore[attr-defined]
+        if _ios_bundle == 'com.apple.mobilephone':
+            try:
+                from config import PLAYBACK_VOLUME_APPLE_PHONE as _av
+                if _av is not None:
+                    _apple_vol = float(_av)
+                    # iOS 단말에 주입하는 화자에게만 적용
+                    if getattr(self, 'speaker1_platform', '') == 'iOS':  # type: ignore[attr-defined]
+                        s1_volume = _apple_vol
+                    if getattr(self, 'speaker2_platform', '') == 'iOS':  # type: ignore[attr-defined]
+                        s2_volume = _apple_vol
+                    print(f"🍎 Apple 전화 앱 감지 → 재생 볼륨 {_apple_vol:.2f} 적용 (클리핑 방지)")
+            except (ImportError, AttributeError, ValueError):
+                pass
+
         def _play_s1():
             try:
                 audio_file = self.audio_files.get('speaker1')  # type: ignore[attr-defined]
@@ -213,6 +230,21 @@ class AudioPlaybackMixin:
         except (ImportError, AttributeError, ValueError):
             s1_volume = playback_volume
             s2_volume = playback_volume
+
+        # Apple 전화 앱 전용 볼륨 오버라이드
+        _ios_bundle = getattr(self, 'ios_app_bundle_id', '')  # type: ignore[attr-defined]
+        if _ios_bundle == 'com.apple.mobilephone':
+            try:
+                from config import PLAYBACK_VOLUME_APPLE_PHONE as _av
+                if _av is not None:
+                    _apple_vol = float(_av)
+                    if getattr(self, 'speaker1_platform', '') == 'iOS':  # type: ignore[attr-defined]
+                        s1_volume = _apple_vol
+                    if getattr(self, 'speaker2_platform', '') == 'iOS':  # type: ignore[attr-defined]
+                        s2_volume = _apple_vol
+                    print(f"🍎 Apple 전화 앱 감지 → 재생 볼륨 {_apple_vol:.2f} 적용 (클리핑 방지)")
+            except (ImportError, AttributeError, ValueError):
+                pass
 
         # play_at_file: 각 워커가 폴링할 파일 경로
         ts_dir = tempfile.gettempdir()
@@ -439,7 +471,9 @@ class AudioPlaybackMixin:
                     if reg_result.returncode != 0 and ('not found' in reg_result.stderr or 'offline' in reg_result.stderr):
                         adb_reachable = False
                     else:
-                        reg_active = 'mCallState=2' in reg_result.stdout
+                        # ⚠️ Samsung Android 16(API 36)은 'mCallState: 2' 형식(콜론+공백) 사용
+                        #    'mCallState=2' 하드코딩 대신 regex로 양쪽 지원
+                        reg_active = bool(_re.search(r'mCallState[=:]\s*2', reg_result.stdout))
                 except Exception:
                     adb_reachable = False
 
@@ -516,7 +550,8 @@ class AudioPlaybackMixin:
                                     ['adb', '-s', s1_udid, 'shell', 'dumpsys', 'telephony.registry'],
                                     capture_output=True, text=True, timeout=3
                                 ).stdout
-                                android_cross_active = 'mCallState=2' in reg_out
+                                # ⚠️ Samsung Android 16 'mCallState: 2' 대응
+                                android_cross_active = bool(_re.search(r'mCallState[=:]\s*2', reg_out))
                             except Exception:
                                 pass
 

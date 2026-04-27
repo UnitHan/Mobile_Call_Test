@@ -68,10 +68,14 @@ def find_offset_frames(ref_audio: np.ndarray, test_audio: np.ndarray,
                        sr: int,
                        max_offset_sec: float = MAX_OFFSET_SEC) -> int:
     """Raw waveform FFT cross-correlation으로 test의 시작 오프셋(프레임)을 반환."""
-    max_lag = int(max_offset_sec * sr)
     n = len(ref_audio) + len(test_audio)
+    # max_lag이 n을 초과하면 corr[-max_lag:] 인덱싱이 깨지므로 n//2로 클램프
+    max_lag = min(int(max_offset_sec * sr), n // 2)
     fa = np.fft.rfft(ref_audio.astype(np.float64), n=n)
     fb = np.fft.rfft(test_audio.astype(np.float64), n=n)
+    # test가 무음(에너지 없음)이면 correlation이 의미 없으므로 0 반환
+    if np.max(np.abs(fb)) < 1e-10:
+        return 0
     corr = np.fft.irfft(fa * np.conj(fb), n=n)
     cands = np.concatenate([corr[-max_lag:], corr[:max_lag + 1]])
     peak = int(np.argmax(cands)) - max_lag
@@ -108,6 +112,9 @@ def detect_gaps_envelope(
     if ref_audio is not None and test_audio is not None:
         offset_samples = find_offset_frames(ref_audio, test_audio, sr, max_offset_sec)
         offset = int(round(offset_samples / sr / frame_sec))
+        # 오프셋이 배열 길이를 초과하면(무음 신호 등) 0으로 폴백
+        max_allowed = max(0, min(len(ref_db), len(test_db)) - 1)
+        offset = max(-max_allowed, min(max_allowed, offset))
     else:
         # fallback: 에너지 기반 (raw audio 없을 때)
         offset = 0

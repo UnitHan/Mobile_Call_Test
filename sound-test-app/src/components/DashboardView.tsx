@@ -730,8 +730,8 @@ export function DashboardView({ results, runningResults, sessions, onClear, onDe
                             const isReverse = r.tcId === "TC_02" || r.tcId === "TC_04";
                             const col1Mos = isReverse ? r.androidVisqolMos : r.iosVisqolMos;
                             const col2Mos = isReverse ? r.iosVisqolMos : r.androidVisqolMos;
-                            const col1Os = isReverse ? "AOS" : "iOS";
-                            const col2Os = isReverse ? "iOS" : "AOS";
+                            const col1Os = isReverse ? "iOS" : "AOS";
+                            const col2Os = isReverse ? "AOS" : "iOS";
                             return (
                               <>
                                 <td className={`td-mos ${mosCls(col1Mos)}`}>

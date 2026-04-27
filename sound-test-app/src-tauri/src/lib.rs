@@ -43,8 +43,12 @@ pub fn run() {
                 use tauri::menu::{AboutMetadata, MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
                 let handle = app.handle();
                 let icon = app.default_window_icon().cloned();
+                // 신호등 영역 타이틀 텍스트 제거
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_title("");
+                }
                 let about = AboutMetadata {
-                    name: Some("ixi-O 통화기능 테스트".to_string()),
+                    name: Some("ixi-O 음성통화 테스트 자동화".to_string()),
                     version: Some(env!("CARGO_PKG_VERSION").to_string()),
                     copyright: Some("© 2026 QA Bulls".to_string()),
                     icon,
@@ -52,7 +56,7 @@ pub fn run() {
                 };
                 let about_item = PredefinedMenuItem::about(handle, None, Some(about))?;
                 let quit_item  = PredefinedMenuItem::quit(handle, None)?;
-                let app_submenu = SubmenuBuilder::new(handle, "ixi-O")
+                let app_submenu = SubmenuBuilder::new(handle, "ixi-O 음성통화 테스트 자동화")
                     .item(&about_item)
                     .separator()
                     .item(&quit_item)

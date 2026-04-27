@@ -523,7 +523,7 @@ pub fn list_ios_devices(app: tauri::AppHandle) -> Result<DeviceListResponse, Str
         let mut py_cmd = Command::new(&python_path);
         py_cmd.env("PATH", extended_path())
               .args([script_path.to_string_lossy().as_ref(), tmp_path]);
-        if let Some(stdout) = run_cmd_timeout(py_cmd, 8) {
+        if let Some(stdout) = run_cmd_timeout(py_cmd, 15) {
             for line in stdout.lines() {
                 if line.starts_with("ERR:") {
                     ui_log(&format!("⚠️ devicectl JSON: {}", line));

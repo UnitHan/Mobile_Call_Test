@@ -395,10 +395,10 @@ function App() {
             : t("status.forceClose", { cur: String(i), total: String(repeatCount), sec: String(waitSec) });
           setStatusMessage(reason);
           await new Promise<void>((res) => {
-            const id = setTimeout(res, waitSec * 1000);
             const check = setInterval(() => {
               if (stopRepeatRef.current) { clearTimeout(id); clearInterval(check); res(); }
             }, 200);
+            const id = setTimeout(() => { clearInterval(check); res(); }, waitSec * 1000);
           });
           continue;
         }
@@ -406,10 +406,10 @@ function App() {
         if (i <= repeatCount) {
           setStatusMessage(t("status.repeatDoneNext", { cur: String(i - 1), total: String(repeatCount) }));
           await new Promise<void>((res) => {
-            const id = setTimeout(res, 3000);
             const check = setInterval(() => {
               if (stopRepeatRef.current) { clearTimeout(id); clearInterval(check); res(); }
             }, 200);
+            const id = setTimeout(() => { clearInterval(check); res(); }, 3000);
           });
         } else {
           setStatusMessage(t("status.repeatDone", { total: String(repeatCount) }));
@@ -574,7 +574,7 @@ function App() {
       />
 
       {/* ── 탭 스트립 ── */}
-      <div className="tab-strip">
+      <div className="tab-strip" data-tauri-drag-region>
         <button
           className={`tab-btn${activeTab === "home" ? " active" : ""}`}
           onClick={() => setActiveTab("home")}
@@ -704,6 +704,8 @@ function App() {
           onDisconnectAndroid={devices.handleDisconnectAndroid}
           onRefreshAndroid={devices.loadAndroidDevices}
           onCheckIphone={devices.handleCheckIphone}
+          onRefreshIos={devices.loadIosDevices}
+          androidDevices={devices.androidDevices}
           iosDevices={devices.iosDevices}
           onInstallWda={devices.handleInstallWda}
           watchdogRunning={devices.watchdogRunning}

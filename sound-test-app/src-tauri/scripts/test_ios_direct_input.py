@@ -48,7 +48,7 @@ def create_driver():
     }
     if wda_url:
         caps['appium:webDriverAgentUrl'] = wda_url
-        caps['appium:usePrebuiltWDA'] = True
+        caps['appium:usePreinstalledWDA'] = True
         caps['appium:useNewWDA'] = False
         print(f"WDA 재사용: {wda_url}")
     options = AppiumOptions()

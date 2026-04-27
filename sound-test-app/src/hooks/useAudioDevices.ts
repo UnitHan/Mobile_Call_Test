@@ -67,8 +67,12 @@ export function useAudioDevices(setStatus: (msg: string) => void) {
         else if (parts[1] === "speaker2") setSpeaker2Progress(progress);
       }
     });
+    // audio-interface-updated: 슬롯 저장 성공 시 재시작 없이 오디오 장치 목록 갱신
+    const unlistenInterface = await listen("audio-interface-updated", () => {
+      loadAudioDevices();
+    });
     progressUnlisten.current = unlisten;
-    return () => unlisten();
+    return () => { unlisten(); unlistenInterface(); };
   };
 
   const resetProgress = () => {

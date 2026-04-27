@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 use tauri::Emitter;
 
 use crate::db::{
@@ -643,14 +643,26 @@ pub fn db_export_stats(
     to_date: Option<String>,
     limit: Option<i64>,
 ) -> Result<DbExportData, String> {
+    // 날짜 형식 검증 (YYYY-MM-DD) — with_db 클로저 밖에서 String 에러 반환
+    fn is_valid_date(s: &str) -> bool {
+        if s.len() != 10 { return false; }
+        let b = s.as_bytes();
+        b[4] == b'-' && b[7] == b'-'
+            && b[..4].iter().all(|c| c.is_ascii_digit())
+            && b[5..7].iter().all(|c| c.is_ascii_digit())
+            && b[8..].iter().all(|c| c.is_ascii_digit())
+    }
+    let from = from_date.clone().unwrap_or_else(|| "1970-01-01".to_string());
+    let to   = to_date.clone().unwrap_or_else(|| "9999-12-31".to_string());
+    if !is_valid_date(&from) || !is_valid_date(&to) {
+        return Err("날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)".to_string());
+    }
+    let lim: i64 = limit.unwrap_or(5000).max(1).min(50000);
+
     with_db(|conn| {
-        // 날짜 필터 조건
-        let from = from_date.clone().unwrap_or_else(|| "1970-01-01".to_string());
-        let to   = to_date.clone().unwrap_or_else(|| "9999-12-31".to_string());
-        let lim  = limit.unwrap_or(5000);
 
         // 1. 전체 결과 목록
-        let mut stmt = conn.prepare(&format!(
+        let mut stmt = conn.prepare(
             "SELECT run_id, session_id, repeat_index, tc_id, started_at, finished_at,
                     duration_ms, status, ios_visqol_mos, android_visqol_mos, snr_db,
                     dropout_count, dropout_severity, dropout_report_path, mos_report_path,
@@ -661,10 +673,10 @@ pub fn db_export_stats(
                     android_app_ver, ios_app_ver, android_device, android_os_ver,
                     ios_device, ios_os_ver, profile_name, carrier
              FROM tc_results
-             WHERE date(started_at) >= '{}' AND date(started_at) <= '{}'
-             ORDER BY started_at DESC LIMIT {}", from, to, lim
-        ))?;
-        let results: Vec<ResultSummary> = stmt.query_map([], |row| {
+             WHERE date(started_at) >= ?1 AND date(started_at) <= ?2
+             ORDER BY started_at DESC LIMIT ?3"
+        )?;
+        let results: Vec<ResultSummary> = stmt.query_map(params![from, to, lim], |row| {
             Ok(db::TcResultRow {
                 run_id:               row.get(0)?,
                 session_id:           row.get(1)?,
@@ -705,16 +717,13 @@ pub fn db_export_stats(
 
         // 실제 전체 건수 (LIMIT 무관)
         let total_count: i64 = conn.query_row(
-            &format!(
-                "SELECT COUNT(*) FROM tc_results WHERE date(started_at) >= '{}' AND date(started_at) <= '{}'",
-                from, to
-            ),
-            [],
+            "SELECT COUNT(*) FROM tc_results WHERE date(started_at) >= ?1 AND date(started_at) <= ?2",
+            params![from, to],
             |row| row.get(0),
         ).unwrap_or(0);
 
         // 2. TC별 PASS/FAIL 통계
-        let mut stmt2 = conn.prepare(&format!(
+        let mut stmt2 = conn.prepare(
             "SELECT tc_id,
                     COUNT(*) as total,
                     SUM(CASE WHEN status='PASS'  THEN 1 ELSE 0 END) as pass,
@@ -725,10 +734,10 @@ pub fn db_export_stats(
                     AVG(android_visqol_mos),
                     AVG(dropout_count)
              FROM tc_results
-             WHERE date(started_at) >= '{}' AND date(started_at) <= '{}'
-             GROUP BY tc_id ORDER BY tc_id", from, to
-        ))?;
-        let tc_stats: Vec<TcStats> = stmt2.query_map([], |row| {
+             WHERE date(started_at) >= ?1 AND date(started_at) <= ?2
+             GROUP BY tc_id ORDER BY tc_id"
+        )?;
+        let tc_stats: Vec<TcStats> = stmt2.query_map(params![from, to], |row| {
             let total: i64 = row.get(1)?;
             let pass: i64  = row.get(2)?;
             Ok(TcStats {
@@ -746,14 +755,14 @@ pub fn db_export_stats(
         })?.filter_map(|r| r.ok()).collect();
 
         // 3. 날짜별 MOS 추이
-        let mut stmt3 = conn.prepare(&format!(
+        let mut stmt3 = conn.prepare(
             "SELECT date(started_at) as d, tc_id,
                     AVG(ios_visqol_mos), AVG(android_visqol_mos), COUNT(*)
              FROM tc_results
-             WHERE date(started_at) >= '{}' AND date(started_at) <= '{}'
-             GROUP BY d, tc_id ORDER BY d, tc_id", from, to
-        ))?;
-        let daily_mos: Vec<DailyMos> = stmt3.query_map([], |row| {
+             WHERE date(started_at) >= ?1 AND date(started_at) <= ?2
+             GROUP BY d, tc_id ORDER BY d, tc_id"
+        )?;
+        let daily_mos: Vec<DailyMos> = stmt3.query_map(params![from, to], |row| {
             Ok(DailyMos {
                 date:            row.get(0)?,
                 tc_id:           row.get(1)?,
@@ -764,13 +773,13 @@ pub fn db_export_stats(
         })?.filter_map(|r| r.ok()).collect();
 
         // 4. Severity 분포
-        let mut stmt4 = conn.prepare(&format!(
+        let mut stmt4 = conn.prepare(
             "SELECT tc_id, COALESCE(dropout_severity, '없음') as sev, COUNT(*)
              FROM tc_results
-             WHERE date(started_at) >= '{}' AND date(started_at) <= '{}'
-             GROUP BY tc_id, sev ORDER BY tc_id, sev", from, to
-        ))?;
-        let severity_stats: Vec<SeverityStats> = stmt4.query_map([], |row| {
+             WHERE date(started_at) >= ?1 AND date(started_at) <= ?2
+             GROUP BY tc_id, sev ORDER BY tc_id, sev"
+        )?;
+        let severity_stats: Vec<SeverityStats> = stmt4.query_map(params![from, to], |row| {
             Ok(SeverityStats {
                 tc_id:    row.get(0)?,
                 severity: row.get(1)?,

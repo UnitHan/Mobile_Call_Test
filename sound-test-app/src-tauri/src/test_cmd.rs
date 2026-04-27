@@ -58,7 +58,19 @@ pub fn save_session_report(html: String, filename: String) -> Result<String, Str
 /// 이미지/파일을 base64 문자열로 읽어 반환합니다
 #[tauri::command]
 pub fn read_file_base64(path: String) -> Result<String, String> {
-    let data = std::fs::read(&path).map_err(|e| format!("파일 읽기 실패: {}", e))?;
+    // 허용 루트 검증
+    let home = std::env::var("HOME").unwrap_or_default();
+    let allowed_roots: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from(&home).join("Documents").join("sound"),
+        std::path::PathBuf::from("/tmp"),
+        std::env::temp_dir(),
+    ];
+    let p = std::path::Path::new(&path);
+    let canon = p.canonicalize().map_err(|e| format!("경로 확인 실패: {}", e))?;
+    if !allowed_roots.iter().any(|r| canon.starts_with(r)) {
+        return Err("허용되지 않은 경로입니다".to_string());
+    }
+    let data = std::fs::read(&canon).map_err(|e| format!("파일 읽기 실패: {}", e))?;
     Ok(base64::engine::general_purpose::STANDARD.encode(&data))
 }
 
@@ -330,6 +342,10 @@ pub async fn save_audio_interface_config(
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let result: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or(serde_json::json!({"ok": false, "message": "JSON 파싱 실패"}));
+    // 저장 성공 시 프론트엔드에 이벤트 emit → 재시작 없이 UI 갱신
+    if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        let _ = app.emit("audio-interface-updated", &result);
+    }
     Ok(result)
 }
 
@@ -804,24 +820,26 @@ pub async fn run_dropout_analysis(
     if !tc.is_empty() {
         cmd.arg("--tc-type").arg(tc);
     }
-    // 화자별 정답지 → 플랫폼 매핑:
-    //   S1 출력포트 = CONNECT 6 [1] → Android 입력
-    //   S2 출력포트 = CONNECT 6 [2] → iPhone 입력
+    // 화자별 정답지 → 플랫폼 매핑 (수신단 기준):
+    //   S1(SPEAKER_00/철수) = iPhone 스피커로 재생 → Android가 수신
+    //   S2(SPEAKER_01/영희) = Android 스피커로 재생 → iPhone(iOS)이 수신
     //
-    //   TC_01: 화자1=Android(S1 발신), 화자2=iPhone(S2 발신)
-    //     → Android 녹음 = iPhone이 보낸 S2,  iOS 녹음 = Android가 보낸 S1
-    //   TC_02: 화자1=iPhone(S1 발신), 화자2=Android(S2 발신)
-    //     → Android 녹음 = iPhone이 보낸 S1,  iOS 녹음 = Android가 보낸 S2
+    //   TC_01/03: sp1→iPhone mic→Android ear(CONN6#1=Android_*.wav), sp2→Android mic→iPhone ear(CONN6#2=iOS_*.wav)
+    //     → android_recording (CONN6#1, Android수신) = 열화된 S1 → ref_for_android = S1
+    //     → ios_recording     (CONN6#2, iPhone수신)  = 열화된 S2 → ref_for_ios     = S2
+    //   TC_02/04: sp1→Android mic→iPhone ear(CONN6#2=iOS_*.wav), sp2→iPhone mic→Android ear(CONN6#1=Android_*.wav)
+    //     → android_recording (CONN6#1, Android수신) = 열화된 S2 → ref_for_android = S2
+    //     → ios_recording     (CONN6#2, iPhone수신)  = 열화된 S1 → ref_for_ios     = S1
     let is_reverse_tc = tc == "TC_02" || tc == "TC_04";
     let (ref_for_android, ref_for_ios) = if is_reverse_tc {
-        // TC_02: Android 녹음=S1, iOS 녹음=S2
-        (&ref_audio_path_s1, &ref_audio_path_s2)
-    } else {
-        // TC_01: Android 녹음=S2, iOS 녹음=S1
+        // TC_02/04: android_rec(CONN6#1)=S2, ios_rec(CONN6#2)=S1
         (&ref_audio_path_s2, &ref_audio_path_s1)
+    } else {
+        // TC_01/03: android_rec(CONN6#1)=S1, ios_rec(CONN6#2)=S2
+        (&ref_audio_path_s1, &ref_audio_path_s2)
     };
     if is_reverse_tc {
-        println!("  ↔️ TC_02/04: Android 녹음=S1, iOS 녹음=S2 매핑");
+        println!("  ↔️ TC_02/04: android_rec=S2, ios_rec=S1 매핑 (방향 반전)");
     }
     if !ref_for_android.is_empty() {
         cmd.arg("--ref-path-android").arg(ref_for_android);

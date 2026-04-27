@@ -1049,14 +1049,14 @@ class IxioAutomatedTest(
             try:
                 driver.quit()
                 print(f"✅ {key} 연결 종료")
-            except:
+            except Exception:
                 pass
         
         # HTTP 서버 중지 (iOS용)
         try:
             if self.speaker1_platform == 'iOS' or self.speaker2_platform == 'iOS':
                 self.audio_handler.stop_http_server()
-        except:
+        except Exception:
             pass
         
         # 무선 터널 종료
@@ -1065,10 +1065,10 @@ class IxioAutomatedTest(
                 self.tunnel_process.terminate()
                 self.tunnel_process.wait(timeout=5)
                 print(f"✅ iOS 무선 터널 종료")
-            except:
+            except Exception:
                 try:
                     self.tunnel_process.kill()
-                except:
+                except Exception:
                     pass
         
         # 포트 정리 (다음 테스트 실행 준비)

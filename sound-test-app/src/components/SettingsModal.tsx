@@ -29,12 +29,12 @@ function AudioInterfaceTab() {
   const [androidLocId, setAndroidLocId] = useState<number | null>(null);
   const [iosLocId, setIosLocId] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "ok" | "err">("idle");
+  const [saveMsg, setSaveMsg] = useState("");
+  const { t } = useT();
 
   const scan = useCallback(async () => {
     setScanning(true);
-    setMessage(null);
     try {
       const result = await invoke<AudioInterface[]>("scan_audio_interfaces");
       setInterfaces(result || []);
@@ -51,7 +51,8 @@ function AudioInterfaceTab() {
         setIosLocId(result[0]?.location_id ?? null);
       }
     } catch (e) {
-      setMessage({ text: `스캔 실패: ${e}`, ok: false });
+      setSaveState("err");
+      setSaveMsg(`스캔 실패: ${e}`);
     } finally {
       setScanning(false);
     }
@@ -59,28 +60,36 @@ function AudioInterfaceTab() {
 
   useEffect(() => { scan(); }, [scan]);
 
-  const save = async () => {
-    if (androidLocId === null || iosLocId === null) {
-      setMessage({ text: "Android / iOS 슬롯을 모두 선택해 주세요.", ok: false });
+  const autoSave = async (androidId: number | null, iosId: number | null) => {
+    if (androidId === null || iosId === null) return;
+    if (androidId === iosId) {
+      setSaveState("err");
+      setSaveMsg(t("settings.audioInterfaceTab.errDuplicate"));
       return;
     }
-    if (androidLocId === iosLocId) {
-      setMessage({ text: "Android와 iOS에 같은 장치를 할당할 수 없습니다.", ok: false });
-      return;
-    }
-    setSaving(true);
-    setMessage(null);
+    setSaveState("saving");
+    setSaveMsg("");
     try {
       const res = await invoke<{ ok: boolean; message: string }>(
         "save_audio_interface_config",
-        { androidLocationId: androidLocId, iosLocationId: iosLocId }
+        { androidLocationId: androidId, iosLocationId: iosId }
       );
-      setMessage({ text: res.message, ok: res.ok });
+      setSaveState(res.ok ? "ok" : "err");
+      setSaveMsg(res.ok ? t("settings.audioInterfaceTab.autoSaved") : res.message);
     } catch (e) {
-      setMessage({ text: `저장 실패: ${e}`, ok: false });
-    } finally {
-      setSaving(false);
+      setSaveState("err");
+      setSaveMsg(`저장 실패: ${e}`);
     }
+  };
+
+  const handleAndroidChange = (locId: number | null) => {
+    setAndroidLocId(locId);
+    autoSave(locId, iosLocId);
+  };
+
+  const handleIosChange = (locId: number | null) => {
+    setIosLocId(locId);
+    autoSave(androidLocId, locId);
   };
 
   const fmtLoc = (lid: number) => `0x${lid.toString(16).toUpperCase().padStart(8, "0")} (${lid})`;
@@ -88,40 +97,33 @@ function AudioInterfaceTab() {
   return (
     <div className="stg-device-body">
       <div className="stg-desc-box">
-        CONNECT 6 × 2대의 역할을 고정합니다.<br />
+        {t("settings.audioInterfaceTab.desc")}<br />
         <span style={{ fontSize: "0.9em", color: "var(--text-dim)" }}>
-          USB 포트를 바꿔 꽂거나 Mac을 재시작하면 장치 인덱스가 바뀔 수 있습니다.
-          스캔 후 Android · iOS 슬롯을 지정하고 저장하면 config.py에 반영됩니다.
+          {t("settings.audioInterfaceTab.descHint")}
         </span>
       </div>
 
-      {/* 스캔 결과 테이블 */}
+      {/* 스캔 결과 */}
       <div style={{ marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-          <span className="stg-subsection-title" style={{ margin: 0 }}>🔌 연결된 오디오 인터페이스</span>
-          <button className="stg-btn-small" onClick={scan} disabled={scanning}>
-            {scanning ? "스캔 중…" : "🔄 재스캔"}
+          <span className="stg-subsection-title" style={{ margin: 0 }}>
+            {t("settings.audioInterfaceTab.connectedTitle")}
+          </span>
+          <button className="btn-xs btn-ghost" onClick={scan} disabled={scanning}>
+            {scanning ? t("settings.audioInterfaceTab.scanning") : `↺ ${t("settings.audioInterfaceTab.rescan")}`}
           </button>
         </div>
 
         {interfaces.length === 0 && !scanning && (
-          <div style={{ color: "var(--text-dim)", fontSize: "0.9em" }}>연결된 USB 오디오 장치가 없습니다.</div>
+          <div style={{ color: "var(--text-dim)", fontSize: "0.9em" }}>
+            {t("settings.audioInterfaceTab.noDevice")}
+          </div>
         )}
 
         {interfaces.map((iface) => (
-          <div key={iface.location_id}
-            style={{
-              background: "var(--bg-card, #1e1e2e)",
-              border: "1px solid var(--border, #333)",
-              borderRadius: 6,
-              padding: "8px 12px",
-              marginBottom: 6,
-              fontSize: "0.88em",
-              fontFamily: "monospace",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>{iface.name}</div>
-            <div style={{ color: "var(--text-dim)" }}>
+          <div key={iface.location_id} className="audio-iface-card">
+            <div className="audio-iface-name">{iface.name}</div>
+            <div className="audio-iface-detail">
               LocationID: {fmtLoc(iface.location_id)}<br />
               IN: sd[{iface.sd_in_index ?? "?"}] ({iface.in_channels}ch) &nbsp;|&nbsp;
               OUT: sd[{iface.sd_out_index ?? "?"}] ({iface.out_channels}ch) &nbsp;|&nbsp;
@@ -131,66 +133,57 @@ function AudioInterfaceTab() {
         ))}
       </div>
 
-      {/* 역할 할당 */}
+      {/* 슬롯 할당 */}
       {interfaces.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <div className="stg-subsection-title">📋 슬롯 할당</div>
+          <div className="stg-subsection-title">{t("settings.audioInterfaceTab.slotTitle")}</div>
 
           {/* Android 슬롯 */}
-          <div className="stg-field-row" style={{ marginTop: 10 }}>
-            <span className="stg-field-name">🤖 Android 슬롯</span>
-            <span className="stg-field-hint">Android 단말이 연결된 CONNECT 6</span>
+          <div className="audio-slot-row">
+            <div className="audio-slot-label">
+              <span className="stg-field-name">{t("settings.audioInterfaceTab.androidSlot")}</span>
+              <span className="stg-field-hint">{t("settings.audioInterfaceTab.androidHint")}</span>
+            </div>
             <select
-              className="stg-select"
+              className="stg-select audio-slot-select"
               value={androidLocId ?? ""}
-              onChange={(e) => setAndroidLocId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => handleAndroidChange(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">— 선택 —</option>
+              <option value="">{t("settings.audioInterfaceTab.selectPlaceholder")}</option>
               {interfaces.map((iface) => (
                 <option key={iface.location_id} value={iface.location_id}>
-                  {iface.name} &nbsp; sd[{iface.sd_out_index ?? "?"}] &nbsp; {fmtLoc(iface.location_id)}
+                  {iface.name}  sd[{iface.sd_out_index ?? "?"}]  {fmtLoc(iface.location_id)}
                 </option>
               ))}
             </select>
           </div>
 
           {/* iOS 슬롯 */}
-          <div className="stg-field-row" style={{ marginTop: 8 }}>
-            <span className="stg-field-name">🍎 iOS 슬롯</span>
-            <span className="stg-field-hint">iPhone이 연결된 CONNECT 6</span>
+          <div className="audio-slot-row">
+            <div className="audio-slot-label">
+              <span className="stg-field-name">{t("settings.audioInterfaceTab.iosSlot")}</span>
+              <span className="stg-field-hint">{t("settings.audioInterfaceTab.iosHint")}</span>
+            </div>
             <select
-              className="stg-select"
+              className="stg-select audio-slot-select"
               value={iosLocId ?? ""}
-              onChange={(e) => setIosLocId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => handleIosChange(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">— 선택 —</option>
+              <option value="">{t("settings.audioInterfaceTab.selectPlaceholder")}</option>
               {interfaces.map((iface) => (
                 <option key={iface.location_id} value={iface.location_id}>
-                  {iface.name} &nbsp; sd[{iface.sd_out_index ?? "?"}] &nbsp; {fmtLoc(iface.location_id)}
+                  {iface.name}  sd[{iface.sd_out_index ?? "?"}]  {fmtLoc(iface.location_id)}
                 </option>
               ))}
             </select>
           </div>
 
-          <button
-            className="stg-btn-primary"
-            style={{ marginTop: 14 }}
-            onClick={save}
-            disabled={saving || androidLocId === null || iosLocId === null}
-          >
-            {saving ? "저장 중…" : "💾 config.py에 저장"}
-          </button>
-
-          {message && (
-            <div style={{
-              marginTop: 8,
-              padding: "6px 10px",
-              borderRadius: 5,
-              fontSize: "0.88em",
-              background: message.ok ? "rgba(76,175,80,0.15)" : "rgba(244,67,54,0.15)",
-              color: message.ok ? "#81c784" : "#e57373",
-            }}>
-              {message.ok ? "✅" : "❌"} {message.text}
+          {saveState !== "idle" && (
+            <div className={`audio-iface-msg${saveState === "ok" ? " ok" : saveState === "err" ? " err" : ""}`}
+              style={{ marginTop: 10 }}>
+              {saveState === "saving" && `⏳ ${t("settings.audioInterfaceTab.saving")}`}
+              {saveState === "ok" && `✅ ${saveMsg}`}
+              {saveState === "err" && `❌ ${saveMsg}`}
             </div>
           )}
         </div>
@@ -568,7 +561,7 @@ export function SettingsModal({
             className={`stg-tab${activeTab === "audio_interface" ? " active" : ""}`}
             onClick={() => setActiveTab("audio_interface")}
           >
-            🔌 오디오 인터페이스
+            🔌 {t("settings.tabs.audioInterface")}
           </button>
           <button
             className={`stg-tab${activeTab === "recording" ? " active" : ""}`}

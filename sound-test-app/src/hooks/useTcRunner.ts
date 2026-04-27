@@ -1256,9 +1256,9 @@ export function useTcRunner(
 
 function sleep(ms: number, stopRef: React.MutableRefObject<boolean>): Promise<void> {
   return new Promise<void>((resolve) => {
-    const id = setTimeout(resolve, ms);
     const check = setInterval(() => {
       if (stopRef.current) { clearTimeout(id); clearInterval(check); resolve(); }
     }, 200);
+    const id = setTimeout(() => { clearInterval(check); resolve(); }, ms);
   });
 }
