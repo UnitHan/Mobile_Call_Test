@@ -37,7 +37,7 @@ class AndroidCallHandlerMixin:
         'com.samsung.android.dialer': {
             'header_keywords': ['Voice 수신전화', 'UHD Voice', '수신전화'],
             'incoming_pkgs': ['com.samsung.android.incallui'],
-            'settle_sec': 1.0,  # 0.0 → 1.0: 수신 UI 완전 렌더링 후 KEYCODE_CALL 전송 (즉시 전송 시 안 먹히는 문제 방지)
+            'settle_sec': 0.0,
         },
         'com.skt.prod.dialer': {
             'header_keywords': ['에이닷', 'T전화', '수신전화'],
@@ -160,11 +160,11 @@ class AndroidCallHandlerMixin:
         """
         try:
             subprocess.run(
-                ['adb', '-s', udid, 'shell', 'uiautomator', 'dump', '/sdcard/window_dump.xml'],
+                ['adb', '-s', udid, 'shell', 'uiautomator', 'dump', '/sdcard/ui_dump.xml'],
                 capture_output=True, text=True, timeout=10
             )
             r = subprocess.run(
-                ['adb', '-s', udid, 'shell', 'cat', '/sdcard/window_dump.xml'],
+                ['adb', '-s', udid, 'shell', 'cat', '/sdcard/ui_dump.xml'],
                 capture_output=True, text=True, timeout=5
             )
             import xml.etree.ElementTree as ET
@@ -196,25 +196,17 @@ class AndroidCallHandlerMixin:
     def _adb_dump_ui(self, udid: str):
         """ADB uiautomator dump로 현재 화면 UI 트리를 반환합니다.
 
-        Samsung Android 16은 /sdcard/window_dump.xml 경로만 허용.
         Returns ET.Element (root) or None.
         """
-        _dump_path = '/sdcard/window_dump.xml'
         try:
-            r_dump = subprocess.run(
-                ['adb', '-s', udid, 'shell', 'uiautomator', 'dump', _dump_path],
+            subprocess.run(
+                ['adb', '-s', udid, 'shell', 'uiautomator', 'dump', '/sdcard/ui_dump.xml'],
                 capture_output=True, text=True, timeout=10
             )
-            if r_dump.returncode != 0:
-                print(f"  ⚠️ UI dump 실패: {r_dump.stderr.strip() or r_dump.stdout.strip()}")
-                return None
             r = subprocess.run(
-                ['adb', '-s', udid, 'shell', 'cat', _dump_path],
+                ['adb', '-s', udid, 'shell', 'cat', '/sdcard/ui_dump.xml'],
                 capture_output=True, text=True, timeout=5
             )
-            if not r.stdout.strip():
-                print(f"  ⚠️ UI dump 빈 결과")
-                return None
             return ET.fromstring(r.stdout)
         except Exception as e:
             print(f"  ⚠️ UI dump 실패: {e}")
@@ -253,22 +245,15 @@ class AndroidCallHandlerMixin:
         matchers: [{"content_desc": "키패드"}, {"text": "전화"}] 등
         timeout 동안 요소가 나타날 때까지 UI 덤프를 재시도합니다.
         fallback_coords: 모든 matcher 실패 시 사용할 고정 좌표 (기존 호환).
-        dump_fail_limit: 연속 UI dump 실패 횟수가 이 값을 초과하면 fallback 즉시 사용.
         """
         deadline = time.time() + timeout
         attempt = 0
-        dump_fail_count = 0
-        dump_fail_limit = 2  # 연속 실패 2회 → fallback 즉시 사용 (Samsung Android 16 대응)
         while time.time() < deadline:
             attempt += 1
             root = self._adb_dump_ui(udid)
             if root is None:
-                dump_fail_count += 1
-                if fallback_coords and dump_fail_count >= dump_fail_limit:
-                    break  # fallback 즉시 사용
                 time.sleep(1)
                 continue
-            dump_fail_count = 0  # dump 성공 시 카운터 리셋
             for m_dict in matchers:
                 coords = self._adb_find_node(root, **m_dict)
                 if coords:
@@ -303,16 +288,13 @@ class AndroidCallHandlerMixin:
         """UI 덤프에서 다이얼 필드의 텍스트가 expected와 일치하는지 확인합니다.
 
         숫자만 추출하여 비교 (하이픈·공백 포매팅 무시).
-        UI 덤프 자체가 불가능한 경우(dump 전체 None)는 검증 스킵 후 True 반환.
         """
         deadline = time.time() + timeout
-        dump_ok = False  # 단 한 번이라도 유효한 덤프를 얻었는지
         while time.time() < deadline:
             root = self._adb_dump_ui(udid)
             if root is None:
                 time.sleep(0.5)
                 continue
-            dump_ok = True
             for node in root.iter('node'):
                 cls_name = node.get('class', '')
                 if 'EditText' in cls_name or 'TextView' in cls_name:
@@ -326,38 +308,12 @@ class AndroidCallHandlerMixin:
                         print(f"  ⚠️ 다이얼 필드 불일치: 기대={expected}, 실제={actual} (원본: {raw})")
                         return False
             time.sleep(0.5)
-        if not dump_ok:
-            # UI 덤프 자체가 불가 (Samsung Android 16 등) → 검증 스킵, 진행
-            print(f"  ⚠️ 다이얼 필드 UI 덤프 불가 — 검증 스킵 후 발신 진행")
-            return True
         print(f"  ⚠️ 다이얼 필드 텍스트 {timeout}초 내 확인 불가")
         return False
 
     # ── Galaxy S22 Ultra 고정 좌표 (ADB-only 발신 폴백용) ─────────────
     _ADB_TAP_KEYPAD = (540, 2102)   # 키패드 탭
     _ADB_TAP_CALL   = (540, 1818)   # 발신(전화) 버튼
-
-    def _adb_wait_for_app_ready(self, udid: str, pkg: str,
-                                timeout: float = 15.0) -> bool:
-        """앱이 foreground에 완전히 뜰 때까지 UI dump가 성공할 때를 기다립니다.
-
-        dump 성공 기준: root가 None이 아니고, 해당 패키지의 노드가 트리에 존재.
-        timeout 내 성공하면 True, 초과 시 False.
-        """
-        deadline = time.time() + timeout
-        attempt = 0
-        while time.time() < deadline:
-            attempt += 1
-            root = self._adb_dump_ui(udid)
-            if root is not None:
-                # 패키지 노드가 하나라도 있으면 앱 로딩 완료로 판단
-                for node in root.iter('node'):
-                    if pkg in (node.get('package') or ''):
-                        print(f"  ✓ 앱 UI 준비 완료 (시도 {attempt}회, {time.time() - (deadline - timeout):.1f}s)")
-                        return True
-            time.sleep(1.0)
-        print(f"  ⚠️ 앱 UI 준비 타임아웃 ({timeout:.0f}s) — 진행")
-        return False
 
     def open_ixio_keypad(self, device_type='speaker1'):
         """익시오 앱에서 키패드 열기 (Android) — ADB-only.
@@ -401,10 +357,7 @@ class AndroidCallHandlerMixin:
             print(f"  ❌ 앱 실행 실패: {e}")
             return False
 
-        # Step 1.5: 앱 로딩 대기 (고정 2.5초)
-        # uiautomator dump는 Samsung Android 16에서 항상 실패(빈 출력)하므로
-        # UI dump 폴링 대신 단순 sleep으로 대체.
-        time.sleep(2.5)
+        time.sleep(3)  # 앱 로딩 대기
 
         # Step 2: 키패드 탭 클릭 — "보이면 누른다" (verify-then-act)
         tapped = self._adb_find_and_tap(
@@ -414,7 +367,7 @@ class AndroidCallHandlerMixin:
                 {'text': '키패드'},
                 {'content_desc': 'Keypad'},
             ],
-            timeout=10.0,
+            timeout=5.0,
             label='키패드 탭',
             fallback_coords=self._ADB_TAP_KEYPAD,
         )
@@ -425,59 +378,11 @@ class AndroidCallHandlerMixin:
         else:
             print(f"⚠️ 키패드 탭 클릭 불확실\n")
         return tapped
-    # ── 키패드 숫자 버튼 고정 좌표 (Galaxy Z Fold4 기준) ─────────────────────
-    _KEYPAD_DIGIT_COORDS: dict = {
-        '1': (149, 1123), '2': (421, 1123), '3': (692, 1123),
-        '4': (149, 1296), '5': (421, 1296), '6': (692, 1296),
-        '7': (149, 1469), '8': (421, 1469), '9': (692, 1469),
-        '*': (149, 1642), '0': (421, 1642), '#': (692, 1642),
-    }
-
-    def _adb_tap_phone_number(self, udid: str, phone_number: str) -> bool:
-        """키패드 숫자 버튼을 하나씩 탭해서 번호 입력.
-
-        ixiO 앱은 React Native 기반으로 adb input text가 앱 내부 state를
-        업데이트하지 않아 발신 버튼이 활성화되지 않음.
-        UI dump로 실제 버튼 좌표를 먼저 시도하고, 실패 시 고정 좌표 사용.
-        """
-        # UI dump로 숫자 버튼 실제 좌표 수집 시도
-        digit_coords: dict = {}
-        root = self._adb_dump_ui(udid)
-        if root is not None:
-            for node in root.iter('node'):
-                tx = node.get('text', '').strip()
-                if tx in '0123456789*#' and len(tx) == 1:
-                    m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
-                    if m:
-                        cx = (int(m.group(1)) + int(m.group(3))) // 2
-                        cy = (int(m.group(2)) + int(m.group(4))) // 2
-                        digit_coords[tx] = (cx, cy)
-
-        if digit_coords:
-            print(f"  ✓ 키패드 좌표 UI dump에서 수집 ({len(digit_coords)}개)")
-        else:
-            print(f"  ⚠️ 키패드 좌표 dump 실패 → 고정 좌표 사용")
-            digit_coords = self._KEYPAD_DIGIT_COORDS
-
-        for ch in phone_number:
-            if ch not in digit_coords:
-                print(f"  ⚠️ '{ch}' 버튼 좌표 없음 — 스킵")
-                continue
-            x, y = digit_coords[ch]
-            subprocess.run(
-                ['adb', '-s', udid, 'shell', 'input', 'tap', str(x), str(y)],
-                capture_output=True, timeout=5
-            )
-            time.sleep(0.15)
-
-        return True
-
     def make_call(self, phone_number):
         """전화 걸기 (화자1에서) - Android 익시오 — ADB-only.
 
-        키패드 숫자 버튼을 하나씩 탭해서 번호 입력 후 발신 버튼 탭.
-        ixiO 앱이 React Native 기반이라 adb input text로는 앱 state가
-        업데이트되지 않아 발신 버튼(cd='전화')이 활성화되지 않음.
+        ADB input text로 번호 입력 + ADB tap으로 발신 버튼 클릭.
+        UiAutomator2를 사용하지 않아 Wi-Fi ADB 환경에서도 안정적.
         """
         _udid = getattr(self, 'speaker1_device', None)
         if not _udid:
@@ -485,24 +390,59 @@ class AndroidCallHandlerMixin:
             return False
 
         try:
-            print(f"📞 발신 중 (CALL 인텐트): {phone_number}")
+            print(f"📞 전화번호 입력 중 (ADB input text): {phone_number}")
+            time.sleep(1)
 
-            # ixiO 앱은 React Native 기반으로 adb input text/tap으로는
-            # 앱 내부 state가 업데이트되지 않아 발신 버튼이 비활성화됨.
-            # android.intent.action.CALL 인텐트를 사용해 직접 발신.
+            # 번호 입력 (EditText가 자동 포커스 상태)
             r = subprocess.run(
-                ['adb', '-s', _udid, 'shell', 'am', 'start',
-                 '-a', 'android.intent.action.CALL',
-                 '-d', f'tel:{phone_number}'],
+                ['adb', '-s', _udid, 'shell', 'input', 'text', phone_number],
                 capture_output=True, text=True, timeout=10
             )
             if r.returncode == 0:
-                print(f"  ✓ CALL 인텐트 전송 완료")
-                print(f"✅ 발신 완료\n")
-                return True
+                print(f"  ✓ 번호 입력 완료")
             else:
-                print(f"  ❌ CALL 인텐트 실패: {r.stderr.strip()}")
+                print(f"  ⚠️ input text 실패: {r.stderr.strip()}")
                 return False
+
+            time.sleep(0.5)
+
+            # 입력 결과 검증 — "보이면 누른다" 원칙: 입력된 값이 보여야 다음 단계
+            if not self._adb_verify_dial_text(_udid, phone_number, timeout=3.0):
+                print(f"  ⚠️ 다이얼 필드 검증 실패 — 번호 재입력 시도")
+                # 필드 클리어 후 재입력
+                subprocess.run(
+                    ['adb', '-s', _udid, 'shell', 'input', 'keyevent', '--longpress', '67'],
+                    capture_output=True, text=True, timeout=5
+                )
+                time.sleep(0.5)
+                subprocess.run(
+                    ['adb', '-s', _udid, 'shell', 'input', 'text', phone_number],
+                    capture_output=True, text=True, timeout=10
+                )
+                time.sleep(0.5)
+                if not self._adb_verify_dial_text(_udid, phone_number, timeout=3.0):
+                    print(f"  ❌ 재입력 후에도 검증 실패 — 발신 중단")
+                    return False
+
+            # 발신 버튼 — "보이면 누른다" (verify-then-act)
+            print(f"☎️ 발신 버튼 탐색 중...")
+            call_tapped = self._adb_find_and_tap(
+                _udid,
+                matchers=[
+                    {'content_desc': '전화'},
+                    {'content_desc': '발신'},
+                    {'content_desc': '통화'},
+                    {'text': '전화'},
+                    {'resource_id': f'{self._android_pkg}:id/callButton'},
+                    {'resource_id': f'{self._android_pkg}:id/btn_call'},
+                ],
+                timeout=5.0,
+                label='발신 버튼',
+                fallback_coords=self._ADB_TAP_CALL,
+            )
+            if call_tapped:
+                print(f"✅ 발신 완료\n")
+            return call_tapped
 
         except Exception as e:
             print(f"❌ 전화 걸기 실패: {e}\n")
@@ -558,23 +498,24 @@ class AndroidCallHandlerMixin:
                 pass
 
         # 방법3: telephony.registry (Android 16+에서는 사실상 primary)
-        # Wi-Fi ADB: grep -m1로 첫 매칭 후 즈시 pipe 중단 → dumpsys 출력 생성 중단 (~120ms)
-        # ⚠️ Samsung Android 16(API 36)은 'mCallState: N' 형식(콜론+공백)을 사용할 수 있음
-        #    'mCallState=N'(등호) 방식과 함께 regex로 양쪽 모두 지원
+        # Wi-Fi ADB: grep -m1로 첫 매칭 후 pipe 중단 → dumpsys 출력 생성 중단 (~120ms)
+        # Samsung Z Fold5 등 VoLTE 전용 기기: mCallState 대신 mRingingCallState=1로 RINGING 표시 가능
         try:
             out = subprocess.run(
                 ['adb', '-s', udid, 'shell',
-                 'dumpsys', 'telephony.registry', '|', 'grep', '-m1', 'mCallState'],
+                 'dumpsys telephony.registry | grep -E "mCallState|mRingingCallState"'],
                 capture_output=True, text=True, timeout=3
             ).stdout
-            if re.search(r'mCallState[=:]\s*1', out):  # RINGING
+            if 'mCallState=1' in out:
                 return True
-            if re.search(r'mCallState[=:]\s*0', out):  # IDLE
-                return False  # IDLE → heavy telecom fallback 생략
+            if 'mRingingCallState=1' in out:
+                return True
+            if 'mCallState=0' in out and 'mRingingCallState=0' in out:
+                pass  # IDLE이지만 아래 방법도 시도 (VoLTE 기기 대응)
         except Exception:
             pass
 
-        # 방법4: telecom (업무 모드·MDM 단말)
+        # 방법4: telecom (업무 모드·MDM 단말 + Samsung VoLTE)
         # ⚠️ 단순 'RINGING' 포함 체크 금지 — 변수명/잔류 텍스트로 오탐 발생
         try:
             out2 = subprocess.run(
@@ -583,6 +524,32 @@ class AndroidCallHandlerMixin:
                 capture_output=True, text=True, timeout=3
             ).stdout
             if re.search(r'(?:mState|state):\s*RINGING', out2):
+                return True
+        except Exception:
+            pass
+
+        # 방법5: audio mode RINGTONE 감지 (Samsung VoLTE/IMS — mCallState 미변화 대응)
+        # audio mode=1(RINGTONE): 수신 벨소리 재생 중일 때 설정됨
+        try:
+            audio_out = subprocess.run(
+                ['adb', '-s', udid, 'shell',
+                 'dumpsys', 'audio', '|', 'grep', '-m1', 'mode:'],
+                capture_output=True, text=True, timeout=3
+            ).stdout
+            if re.search(r'mode:\s*1\b|RINGTONE', audio_out, re.IGNORECASE):
+                return True
+        except Exception:
+            pass
+
+        # 방법6: incallui 포그라운드 감지 (Samsung Android 16 최후 수단)
+        # com.samsung.android.incallui 가 top activity이면 수신 화면 표시 중
+        try:
+            top_out = subprocess.run(
+                ['adb', '-s', udid, 'shell',
+                 'dumpsys', 'activity', 'top', '|', 'grep', '-m1', 'ACTIVITY'],
+                capture_output=True, text=True, timeout=3
+            ).stdout
+            if 'incallui' in top_out.lower() or 'incall' in top_out.lower():
                 return True
         except Exception:
             pass
@@ -637,17 +604,15 @@ class AndroidCallHandlerMixin:
 
         # 방법3: telephony.registry (Android 16+에서는 사실상 primary)
         # Wi-Fi ADB: grep -m1로 첫 매칭 후 pipe 중단 (~120ms)
-        # ⚠️ Samsung Android 16(API 36)은 'mCallState: N' 형식(콜론+공백)을 사용할 수 있음
-        #    'mCallState=N'(등호) 방식과 함께 regex로 양쪽 모두 지원
         try:
             v3 = subprocess.run(
                 ['adb', '-s', udid, 'shell',
                  'dumpsys', 'telephony.registry', '|', 'grep', '-m1', 'mCallState'],
                 capture_output=True, text=True, timeout=3
             ).stdout
-            if re.search(r'mCallState[=:]\s*2', v3):  # OFFHOOK
+            if 'mCallState=2' in v3:
                 return True
-            if re.search(r'mCallState[=:]\s*[01]', v3):  # IDLE or RINGING
+            if 'mCallState=0' in v3 or 'mCallState=1' in v3:
                 return False  # IDLE/RINGING → heavy telecom fallback 생략
         except Exception:
             pass
@@ -667,7 +632,7 @@ class AndroidCallHandlerMixin:
         return False
 
     @classmethod
-    def _accept_android_ringing_call(cls, udid: str, app_pkg: str | None = None) -> float:
+    def _accept_android_ringing_call(cls, udid: str) -> float:
         """RINGING 상태인 단말에 수신 수락 명령을 순차적으로 시도합니다 (순수 ADB).
 
         ⚠️ GUI(Appium/UIAutomator) 조작은 일절 사용하지 않습니다.
@@ -679,10 +644,7 @@ class AndroidCallHandlerMixin:
            각 전략 사이에 OFFHOOK 상태를 확인하고, 연결됐으면 즉시 중단합니다.
 
         전략 순서 (ADB only):
-          Samsung 다이얼러 (com.samsung.android.*):
-            telecom accept-ringing-call 건너뜀 (Wi-Fi ADB 타임아웃 유발)
-            → KEYCODE_CALL(5)부터 시작
-          API < 36 (非 Samsung):
+          API < 36:
             ① telecom accept-ringing-call — API 26+, 일반 단말 최우선
             ② KEYCODE_CALL (5)            — 수락/종료 토글
             ③ KEYCODE_ANSWER (164)        — 수신 전용 키
@@ -701,18 +663,11 @@ class AndroidCallHandlerMixin:
         """
         api_level = cls._get_android_api(udid)
 
-        # ── Samsung 다이얼러 감지 ─────────────────────────────────────────
-        # com.samsung.android.dialer / com.samsung.android.app.telephony 등
-        # Wi-Fi ADB 환경에서 telecom accept-ringing-call 이 응답 없이 5초 타임아웃 유발
-        _is_samsung = bool(app_pkg and 'samsung' in app_pkg.lower())
-
-        # ── 전략 목록 구성 (API 레벨 + 앱 패키지에 따라 순서 조정) ──────────
+        # ── 전략 목록 구성 (API 레벨에 따라 순서 조정) ─────────────────────
         strategies: list[tuple[str, list[str]]] = []
 
-        if _is_samsung:
-            print(f"  [워쳐]   ℹ️ Samsung 다이얼러({app_pkg}) → telecom accept 건너뜀, KEYCODE_CALL 우선")
-        elif api_level < 36:
-            # API < 36, 非Samsung: telecom accept 먼저 시도 (가장 깨끗한 방법)
+        if api_level < 36:
+            # API < 36: telecom accept 먼저 시도 (가장 깨끗한 방법)
             strategies.append((
                 '① telecom accept-ringing-call',
                 ['telecom', 'accept-ringing-call'],
@@ -725,37 +680,19 @@ class AndroidCallHandlerMixin:
         #    각 전략 사이 OFFHOOK 확인 후 이미 연결됐으면 즉시 중단
         strategies.append(('② KEYCODE_CALL(5)', ['input', 'keyevent', '5']))
         strategies.append(('③ KEYCODE_ANSWER(164)', ['input', 'keyevent', '164']))
-        # ⚠️ KEYCODE_HEADSETHOOK(79): 수락/종료 토글 — Samsung 일반 단말은 불필요
-        #    Samsung은 KEYCODE_CALL(5)로 충분하며 HEADSETHOOK은 이미 연결된 통화를 끊을 수 있음
-        #    → Samsung 다이얼러에서는 전략 목록에서 제외
-        if not _is_samsung:
-            strategies.append(('④ KEYCODE_HEADSETHOOK(79)', ['input', 'keyevent', '79']))
+        strategies.append(('④ KEYCODE_HEADSETHOOK(79)', ['input', 'keyevent', '79']))
         strategies.append(('⑤ am broadcast ANSWER',
                            ['am', 'broadcast', '-a', 'android.intent.action.ANSWER']))
-
-        # Samsung 전용 KEYCODE_CALL 후 OFFHOOK 감지 대기 시간:
-        # Android 16(API 36)에서 telephony.registry 업데이트가 늦어질 수 있으므로
-        # 일반(1.05s)보다 긴 대기 → 중간에 OFFHOOK 감지 시 즉시 반환
-        # 합계: Samsung ≈ 10초, 일반 ≈ 1초
-        _offhook_wait_iters = (
-            (0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70,
-             0.80, 0.90, 1.00, 1.00, 1.00, 1.00)
-            if _is_samsung else
-            (0.05, 0.10, 0.15, 0.20, 0.25, 0.30)
-        )
 
         # ── 순차 실행 ─────────────────────────────────────────────────────
         _adb_reconnected = False
         for i, (label, cmd_args) in enumerate(strategies):
             # 토글키 안전장치: 이미 OFFHOOK이면 추가 명령 보내지 않음
             # ⚠️ 첫 번째 전략은 RINGING 직후이므로 OFFHOOK 불가능 → 체크 생략 (~200ms 절약)
-            if i > 0:
-                # Samsung: 연속 2회 확인으로 일시적 ADB 오류에 의한 오판 방지
-                _offhook_now = cls._detect_android_offhook(udid)
-                if _offhook_now:
-                    _ts = time.time()
-                    print(f"  [워쳐]   ✅ 이미 OFFHOOK — 추가 전략 생략")
-                    return _ts, _ts
+            if i > 0 and cls._detect_android_offhook(udid):
+                _ts = time.time()
+                print(f"  [워쳐]   ✅ 이미 OFFHOOK — 추가 전략 생략")
+                return _ts, _ts
 
             _cmd_ts = time.time()
             r = subprocess.run(
@@ -804,8 +741,8 @@ class AndroidCallHandlerMixin:
 
             print(f"  [워쳐]   {label} → rc={r.returncode}{extra}")
 
-            # OFFHOOK 감지 대기 (Samsung은 최대 5초, 일반은 1.05초)
-            for _wait in _offhook_wait_iters:
+            # 첫 체크는 짧게 대기 (Samsung OFFHOOK 전이 ~50-100ms)
+            for _wait in (0.05, 0.10, 0.15, 0.20, 0.25, 0.30):
                 time.sleep(_wait)
                 if cls._detect_android_offhook(udid):
                     _ts = time.time()
@@ -857,9 +794,23 @@ class AndroidCallHandlerMixin:
                     ['adb', '-s', udid, 'shell', 'logcat', '-c'],
                     capture_output=True, timeout=3
                 )
+                # Samsung Android 16 대응: CAE 외 IMS/VoLTE 태그 추가
+                # CAE   : Call Audio Engine (Android 13 이하 Samsung)
+                # CAM   : Call Audio Manager (Android 14+ 일부 Samsung)
+                # ── 전략: 특정 태그 필터 대신 전체 logcat + shell-side grep ──
+                # Samsung Android 16은 어떤 태그(CAE/CAM/ImsPhone/Telecom 등)를 쓰는지
+                # 기기마다 달라 미리 알 수 없음. 태그를 -s로 지정하면 해당 태그가
+                # 없는 기기에서는 아무것도 잡히지 않음.
+                # 해결: logcat 전체를 열고 ADB shell 측에서 grep으로 RINGING 키워드만
+                # 필터링 → 태그 불명 기기에서도 동작, 출력량은 극소 (~1줄/이벤트)
+                _grep_pattern = (
+                    'RINGING\\|CALL_STATE_RINGING\\|MT_RINGING'
+                    '\\|mCallState=1\\|mRingingCallState=1'
+                    '\\|IncomingCall\\|onIncomingCall'
+                )
                 proc = subprocess.Popen(
-                    ['adb', '-s', udid, 'shell', 'logcat', '-v', 'brief',
-                     '-s', 'CAE:I', 'SemWifiBackOff.Sar:D'],
+                    ['adb', '-s', udid, 'shell',
+                     f"logcat -v brief | grep -E '{_grep_pattern}'"],
                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                     text=True
                 )
@@ -869,7 +820,14 @@ class AndroidCallHandlerMixin:
                     line = proc.stdout.readline()
                     if not line:
                         break  # 스트림 끊김
-                    if 'RINGING' in line or 'CALL_STATE_RINGING' in line:
+                    line_stripped = line.strip()
+                    if line_stripped:
+                        print(f"  [워쳐] logcat 매칭: {line_stripped[:120]}")
+                    if ('RINGING' in line or 'CALL_STATE_RINGING' in line
+                            or 'MT_RINGING' in line or 'mCallState=1' in line
+                            or 'mRingingCallState=1' in line
+                            or 'IncomingCall' in line or 'onIncomingCall' in line):
+                        print(f"  [워쳐] ✅ logcat RINGING 감지!")
                         ringing_detected.set()
                         return
                 proc.terminate()
@@ -981,7 +939,7 @@ class AndroidCallHandlerMixin:
         print(f"  [워쳐] 수신 수락 시도 [{_app_pkg}]")
 
         # 수신 수락 (ADB 명령어 순차 시도)
-        offhook_ts, cmd_sent_ts = self._accept_android_ringing_call(udid, app_pkg=_app_pkg)
+        offhook_ts, cmd_sent_ts = self._accept_android_ringing_call(udid)
         offhook_confirmed = offhook_ts > 0.0
 
         # OFFHOOK 미확인 시 ADB 재연결 후 추가 대기
@@ -1149,7 +1107,7 @@ class AndroidCallHandlerMixin:
                             ['adb', '-s', udid, 'shell', 'dumpsys', 'telephony.registry'],
                             capture_output=True, text=True, timeout=5
                         ).stdout
-                        if re.search(r'mCallState[=:]\s*2', reg):  # Samsung Android 16: 'mCallState: 2' 형식 대응
+                        if 'mCallState=2' in reg:
                             # OFFHOOK = 발신/수신 중. VoIP에서는 상대 수락 후에만 2가 되므로
                             # IN_COMMUNICATION + OFFHOOK = 통화 연결로 판단
                             active_ts = time.time()

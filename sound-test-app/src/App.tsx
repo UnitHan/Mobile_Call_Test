@@ -108,6 +108,15 @@ function App() {
   // 설정 모달 상태
   const [showSettings, setShowSettings] = useState(false);
 
+  // WDA 타겟 기기 (Settings에서 설정, localStorage 영속화)
+  const [wdaUdid, setWdaUdid] = useState<string>(
+    () => localStorage.getItem("wdaUdid") ?? ""
+  );
+  const handleWdaUdidChange = (v: string) => {
+    setWdaUdid(v);
+    localStorage.setItem("wdaUdid", v);
+  };
+
   // TC 대시보드 상태
   const [activeTab, setActiveTab] = useState<"home" | "dashboard" | "schedule">("home");
   const [selectedTcs, setSelectedTcs] = useState<Set<TcId>>(new Set());
@@ -171,8 +180,10 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 디바이스 목록 갱신 시: stale/중복/빈 speaker 자동 보정
+  // 디바이스 목록 갱신 시: stale/중복 보정 (빈값 자동 할당 없음 — 사용자 직접 선택)
   // - 목록에 없는 디바이스는 같은 플랫폼 내에서 교체
+  //   ※ iOS 일시 연결 끊김으로 목록에서 잠시 사라지는 경우 교체 방지:
+  //     같은 플랫폼 pool에 2대 이상 있을 때만 stale 교체 실행
   // - 양쪽 speaker가 동일 디바이스면 다른 기기로 교체
   // - speaker가 비어 있으면 남은 기기로 할당
   useEffect(() => {
@@ -185,17 +196,23 @@ function App() {
     let changed = false;
 
     // 1) stale 디바이스 교체 (같은 플랫폼만)
+    //    iOS는 무선 끊김 시 목록에서 일시적으로 사라질 수 있으므로
+    //    해당 플랫폼에 2대 이상 확인됐을 때만 교체 (1대만 남은 경우 교체 안 함)
     if (s1 && !allUdids.has(s1)) {
       const wasAndroid = s1.includes(":");
       const pool = wasAndroid ? devices.androidDevices : devices.iosDevices;
-      const rep = pool.find((d) => d.udid !== s2)?.udid ?? "";
-      if (rep) { s1 = rep; changed = true; }
+      if (pool.length >= 2) {
+        const rep = pool.find((d) => d.udid !== s2)?.udid ?? "";
+        if (rep) { s1 = rep; changed = true; }
+      }
     }
     if (s2 && !allUdids.has(s2)) {
       const wasAndroid = s2.includes(":");
       const pool = wasAndroid ? devices.androidDevices : devices.iosDevices;
-      const rep = pool.find((d) => d.udid !== s1)?.udid ?? "";
-      if (rep) { s2 = rep; changed = true; }
+      if (pool.length >= 2) {
+        const rep = pool.find((d) => d.udid !== s1)?.udid ?? "";
+        if (rep) { s2 = rep; changed = true; }
+      }
     }
 
     // 2) 중복 보정: 양쪽이 같은 디바이스인데 다른 기기가 있으면 교체
@@ -208,15 +225,8 @@ function App() {
       }
     }
 
-    // 3) 빈 speaker 할당
-    if (!s1 && allDevices.length >= 1) {
-      const avail = allDevices.find((d) => d.udid !== s2);
-      if (avail) { s1 = avail.udid; changed = true; }
-    }
-    if (!s2 && allDevices.length >= 1) {
-      const avail = allDevices.find((d) => d.udid !== s1);
-      if (avail) { s2 = avail.udid; changed = true; }
-    }
+    // 3) 빈 speaker 자동 할당 제거 — 잘못된 기기가 자동으로 잡히는 것을 방지
+    //    사용자가 직접 기기를 선택해야 함
 
     if (changed) {
       if (s1 !== speaker1Ref.current) {
@@ -439,7 +449,7 @@ function App() {
     repeat: import("./types").RepeatOptions,
     schedule: import("./types").ScheduleOptions,
   ) => {
-    // ── 글로벌 speaker 보정: stale / 중복 / 빈값 수정 ──
+    // ── TC 시작 전 speaker 보정: stale/중복 수정 (빈값 자동할당 없음) ──
     const allDevices = [...devices.androidDevices, ...devices.iosDevices];
     const connectedUdids = new Set(allDevices.map((d) => d.udid));
     let s1 = speaker1Ref.current;
@@ -461,12 +471,9 @@ function App() {
       const other = allDevices.find((d) => d.udid !== s1);
       if (other) s2 = other.udid;
     }
-    // 빈값 할당
-    if (!s1 && allDevices.length >= 1) {
-      s1 = allDevices.find((d) => d.udid !== s2)?.udid ?? "";
-    }
-    if (!s2 && allDevices.length >= 1) {
-      s2 = allDevices.find((d) => d.udid !== s1)?.udid ?? "";
+    // 빈값 자동 할당 제거 — 잘못된 기기 선택 방지, 사용자가 직접 선택해야 함
+    if (!s1 || !s2) {
+      console.warn(`[TC시작] 기기 미선택: s1=${s1 || "없음"}, s2=${s2 || "없음"} — UI에서 기기를 선택하세요`);
     }
     // 변경 시 state + ref 즉시 반영
     if (s1 !== speaker1Ref.current) {
@@ -638,6 +645,9 @@ function App() {
           onUpdateNotice={notice.updateNotice}
           onDeleteNotice={notice.deleteNotice}
           onMoveNoticeUp={notice.moveUp}
+          iosDevices={devices.iosDevices}
+          wdaUdid={wdaUdid}
+          onWdaUdidChange={handleWdaUdidChange}
         />
       )}
 
@@ -708,6 +718,7 @@ function App() {
           androidDevices={devices.androidDevices}
           iosDevices={devices.iosDevices}
           onInstallWda={devices.handleInstallWda}
+          wdaUdid={wdaUdid}
           watchdogRunning={devices.watchdogRunning}
           onStartWatchdog={devices.handleStartWatchdog}
           onStopWatchdog={devices.handleStopWatchdog}

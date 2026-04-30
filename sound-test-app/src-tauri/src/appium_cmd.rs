@@ -79,9 +79,9 @@ pub async fn start_appium_server(app: tauri::AppHandle) -> Result<ConnectionStat
 
     // 기존 프로세스 종료 (메모리 추적 + 포트 강제 해제)
     let mut android_guard = APPIUM_PROCESS_ANDROID.lock().expect("APPIUM_PROCESS_ANDROID Mutex 오염");
-    if let Some(mut child) = android_guard.take() { let _ = child.kill(); }
+    if let Some(mut child) = android_guard.take() { let _ = child.kill(); let _ = child.wait(); }
     let mut ios_guard = APPIUM_PROCESS_IOS.lock().expect("APPIUM_PROCESS_IOS Mutex 오염");
-    if let Some(mut child) = ios_guard.take() { let _ = child.kill(); }
+    if let Some(mut child) = ios_guard.take() { let _ = child.kill(); let _ = child.wait(); }
     drop(android_guard);
     drop(ios_guard);
     // 포트에 남아있는 프로세스 종료 (크로스플랫폼)
@@ -174,6 +174,7 @@ pub async fn stop_appium_server() -> Result<ConnectionStatus, String> {
     let mut android_guard = APPIUM_PROCESS_ANDROID.lock().expect("APPIUM_PROCESS_ANDROID Mutex 오염");
     if let Some(mut child) = android_guard.take() {
         let _ = child.kill();
+        let _ = child.wait();
         android_stopped = true;
         println!("✅ Android Appium 종료 (4723)");
     }
@@ -182,6 +183,7 @@ pub async fn stop_appium_server() -> Result<ConnectionStatus, String> {
     let mut ios_guard = APPIUM_PROCESS_IOS.lock().expect("APPIUM_PROCESS_IOS Mutex 오염");
     if let Some(mut child) = ios_guard.take() {
         let _ = child.kill();
+        let _ = child.wait();
         ios_stopped = true;
         println!("✅ iOS Appium 종료 (4724)");
     }
@@ -325,13 +327,13 @@ pub async fn start_tc_appium_servers(app: tauri::AppHandle, group: String) -> Re
     // 기존 TC 프로세스 정리
     if run_a {
         kill_port(4725); kill_port(4726);
-        if let Ok(mut g) = TC_A_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); } }
-        if let Ok(mut g) = TC_A_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); } }
+        if let Ok(mut g) = TC_A_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
+        if let Ok(mut g) = TC_A_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
     }
     if run_b {
         kill_port(4727); kill_port(4728);
-        if let Ok(mut g) = TC_B_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); } }
-        if let Ok(mut g) = TC_B_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); } }
+        if let Ok(mut g) = TC_B_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
+        if let Ok(mut g) = TC_B_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
     }
     std::thread::sleep(std::time::Duration::from_millis(400));
 
@@ -373,10 +375,10 @@ pub async fn start_tc_appium_servers(app: tauri::AppHandle, group: String) -> Re
 /// TC 전용 Appium 서버 전체 종료
 #[tauri::command]
 pub async fn stop_tc_appium_servers() -> Result<ConnectionStatus, String> {
-    if let Ok(mut g) = TC_A_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); } }
-    if let Ok(mut g) = TC_A_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); } }
-    if let Ok(mut g) = TC_B_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); } }
-    if let Ok(mut g) = TC_B_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); } }
+    if let Ok(mut g) = TC_A_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
+    if let Ok(mut g) = TC_A_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
+    if let Ok(mut g) = TC_B_APPIUM_ANDROID.lock() { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
+    if let Ok(mut g) = TC_B_APPIUM_IOS.lock()     { if let Some(mut c) = g.take() { let _ = c.kill(); let _ = c.wait(); } }
     for port in [4725u16, 4726, 4727, 4728] { kill_port(port); }
     println!("✅ TC Appium 서버 전체 종료 (4725-4728)");
     Ok(ConnectionStatus { success: true, message: "✅ TC Appium 종료됨".to_string() })

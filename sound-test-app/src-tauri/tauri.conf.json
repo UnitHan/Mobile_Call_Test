@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ixi-O 음성통화 테스트 자동화",
+  "productName": "ixi-O 통화기능 테스트",
   "version": "0.1.0",
   "identifier": "com.qabulls.call",
   "build": {
@@ -12,13 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "",
-        "width": 860,
-        "height": 760,
-        "minWidth": 760,
-        "minHeight": 600,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "title": "ixi-O 통화기능 테스트",
+        "width": 1100,
+        "height": 840,
+        "minWidth": 880,
+        "minHeight": 660
       }
     ],
     "security": {

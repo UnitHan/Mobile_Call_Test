@@ -145,7 +145,7 @@ export function AudioSection({
                 checked={selectedProfileId === p.id}
               />
               <span className="profile-radio-name">
-                {p.id === "daily" ? t("profiles.daily") : p.id === "phishing" ? t("profiles.phishing") : p.name}
+                {p.id === "daily" ? t("profiles.daily") : p.id === "phishing" ? t("profiles.phishing") : p.id === "dating" ? t("profiles.dating") : p.name}
               </span>
               {(p.refAudioPathS1 || p.refAudioPathS2 || p.refAudioPath) && (
                 <span className="profile-radio-badge" title="정답지 음원 설정됨">🎯</span>

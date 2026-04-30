@@ -220,6 +220,7 @@ export const ko = {
   settings: {
     title: "설정",
     tabs: {
+      audioInterface: "오디오 인터페이스",
       speaker: "화자 설정",
       profile: "음원 프로파일",
       script: "음원 대본",
@@ -230,6 +231,26 @@ export const ko = {
       license: "오픈소스 라이선스",
       language: "언어 설정",
       app: "앱 설정",
+    },
+    audioInterface: {
+      title: "CONNECT 6 × 2대의 역할을 고정합니다.",
+      desc: "USB 포트를 바꿔 꽂거나 Mac을 재시작하면 장치 인덱스가 바뀔 수 있습니다. 스캔 후 Android · iOS 슬롯을 지정하고 저장하면 config.py에 반영됩니다.",
+      connectedDevices: "연결된 오디오 인터페이스",
+      scanning: "스캔 중…",
+      rescan: "재스캔",
+      noDevices: "연결된 USB 오디오 장치가 없습니다.",
+      slotAssign: "슬롯 할당",
+      androidSlot: "Android 슬롯",
+      androidSlotHint: "Android 단말이 연결된 CONNECT 6",
+      iosSlot: "iOS 슬롯",
+      iosSlotHint: "iPhone이 연결된 CONNECT 6",
+      selectPlaceholder: "— 선택 —",
+      saving: "저장 중…",
+      saveButton: "config.py에 저장",
+      selectBothError: "Android / iOS 슬롯을 모두 선택해 주세요.",
+      sameDeviceError: "Android와 iOS에 같은 장치를 할당할 수 없습니다.",
+      scanError: "스캔 실패: {{error}}",
+      saveError: "저장 실패: {{error}}",
     },
     speakerTab: {
       desc: "이 TC 실행 시 사용할 디바이스와 음원 프로파일을 지정합니다.",
@@ -304,6 +325,8 @@ export const ko = {
       outputPair: "출력 채널 쌍",
       s1OutputPairHint: "화자1 CONNECT 6 출력",
       s2OutputPairHint: "화자2 CONNECT 6 출력",
+      wdaDevice: "WDA 대상 기기",
+      wdaDeviceHint: "WDA를 설치·실행할 iPhone",
       udidPlaceholder: "UDID 직접 입력",
     },
     audioInterfaceTab: {
@@ -343,6 +366,10 @@ export const ko = {
       hidePw: "[숨기기]",
       savePw: "저장",
       savedPw: "저장됨 ✓",
+      mosMeasurementTitle: "MOS 측정 실행",
+      mosMeasurementDesc: "TC_01~TC_04 테스트 실행 후 MOS(ViSQOL) 분석 수행 여부를 설정합니다. OFF 시 음단절 탐지만 수행하며 분석 시간이 단축됩니다.",
+      mosOn: "MOS 측정 활성화됨",
+      mosOff: "MOS 측정 비활성화됨 (음단절 탐지만)",
     },
     noticeTab: {
       compose: "새 공지 작성",
@@ -424,6 +451,7 @@ export const ko = {
   profiles: {
     daily: "일상 대화",
     phishing: "보이스피싱",
+    dating: "데이팅",
   },
   result: {
     title: "실행 상세",

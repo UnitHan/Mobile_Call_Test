@@ -33,10 +33,11 @@ class Tc01(TcBase):
         if not result:
             return False
 
-        # Phase 2.7: 발신 직후 오디오 subprocess pre-warm (Android SP2 전용)
+        # Phase 2.7: 발신 직후 오디오 subprocess pre-warm (Android SP2 / iOS-iOS 전용)
         #   → RINGING까지 5~15초 대기하는 동안 subprocess 초기화 완료
         #   → OFFHOOK 즉시 trigger만 보내면 ~100ms 내 재생 시작
-        if self.speaker2_platform == 'Android':
+        if self.speaker2_platform == 'Android' or \
+                (self.speaker1_platform == 'iOS' and self.speaker2_platform == 'iOS'):
             self._clean_audio_started_ts_files()
             self._pre_warmed = self.prepare_audio_players()
             if self._pre_warmed:

@@ -200,11 +200,30 @@ class IxioAutomatedTest(
         self.appium_server_android = f'http://127.0.0.1:{appium_port_android}'
         self.appium_server_ios     = f'http://127.0.0.1:{appium_port_ios}'
 
-        self.wda_manager  = IosWdaManager()
+        self.wda_manager     = IosWdaManager()
+        self.wda_manager_sp2 = None  # iOS-iOS 시만 사용
+
+        # ── iOS-iOS 모드: Android 포트 슬롯을 sp1 iOS 전용으로 재활용 ──────
+        # Appium 서버를 두 개 운용하여 iPhone 두 대를 동시에 제어.
+        # Rust 포트 할당(state.rs) 변경 없이 Python 레이어에서만 처리.
+        _ios_ios_mode = (self.speaker1_platform == 'iOS' and self.speaker2_platform == 'iOS')
+        if _ios_ios_mode:
+            self.wda_manager_sp2 = IosWdaManager()
+            # sp1(발신) → android 포트 슬롯, sp2(수신) → ios 포트 슬롯
+            _appium_sp1_ios = self.appium_server_android
+            _appium_sp2_ios = self.appium_server_ios
+            print(f"  📱 iOS-iOS 모드: Appium 포트 재할당 "
+                  f"(sp1→{appium_port_android}, sp2→{appium_port_ios})")
+        else:
+            _appium_sp1_ios = self.appium_server_ios
+            _appium_sp2_ios = None
+
         self.device_setup = AppiumDeviceSetup(
             appium_server_android=self.appium_server_android,
-            appium_server_ios=self.appium_server_ios,
+            appium_server_ios=_appium_sp1_ios,
+            appium_server_ios_sp2=_appium_sp2_ios,
             wda_manager=self.wda_manager,
+            wda_manager_sp2=self.wda_manager_sp2,
             android_app_package=self.android_app_package,
             android_app_activity=self.android_app_activity,
             ios_app_bundle_id=self.ios_app_bundle_id,
@@ -920,6 +939,13 @@ class IxioAutomatedTest(
         팝업이 없으면 조용히 종료 (정상 케이스).
         UiAutomator2 크래시 감지 시 ADB 폴백으로 자동 전환.
         """
+        # ⚠️ iOS에서 '보이는 전화' 팝업 탭 비활성화 (임시).
+        # CallKit PiP 활성 시 WDA page_source/find_element가 ~47초 blocking을 유발.
+        # 분석 완료 전까지 iOS는 건너뜀.
+        if platform == 'iOS':
+            print(f"  ℹ️ [{role}/iOS] '보이는 전화' 팝업 탭 비활성화 (임시)")
+            return False
+
         from appium.webdriver.common.appiumby import AppiumBy
         deadline = time.time() + timeout
 
@@ -964,12 +990,43 @@ class IxioAutomatedTest(
                     print(f"  ⚠️ [{role}/{platform}] '보이는 전화' 탭 시도 실패: {_e}")
                     time.sleep(0.5)
         else:
-            # iOS XCUITest: label / name / value 속성
-            ios_xpath = '//*[@label="보이는 전화" or @name="보이는 전화" or @value="보이는 전화"]'
+            # iOS XCUITest: page_source XML 파싱 방식 (find_element XPATH 대신)
+            # ⚠️ find_element(XPATH)는 "보이는 전화" CallKit PiP 타이머로 인해
+            #    WDA 내부 accessibility snapshot이 계속 변경되어 ~47초 blocking 발생.
+            #    page_source는 WDA가 현재 트리를 snapshot해서 XML로 반환하므로
+            #    동일하게 한 번의 HTTP 요청으로 완료됨 → XML 파싱으로 직접 좌표 추출 후 tap.
+            import xml.etree.ElementTree as _ET_ios
+            import re as _re_ios
             while time.time() < deadline:
                 try:
-                    el = driver.find_element(AppiumBy.XPATH, ios_xpath)
-                    el.click()
+                    src = driver.page_source
+                    # label/name/value 중 하나가 "보이는 전화"인 요소 탐색
+                    root_ios = _ET_ios.fromstring(src.encode('utf-8'))
+                    found_el = None
+                    for node in root_ios.iter():
+                        for attr in ('label', 'name', 'value'):
+                            if node.get(attr) == '보이는 전화':
+                                found_el = node
+                                break
+                        if found_el is not None:
+                            break
+                    if found_el is None:
+                        time.sleep(0.5)
+                        continue
+                    # 좌표 추출 후 tap
+                    x = found_el.get('x')
+                    y = found_el.get('y')
+                    w = found_el.get('width')
+                    h = found_el.get('height')
+                    if x and y and w and h:
+                        cx = int(x) + int(w) // 2
+                        cy = int(y) + int(h) // 2
+                        driver.execute_script('mobile: tap', {'x': cx, 'y': cy})
+                    else:
+                        # 좌표 없으면 XPATH로 폴백 (단 1회만)
+                        ios_xpath = '//*[@label="보이는 전화" or @name="보이는 전화" or @value="보이는 전화"]'
+                        el = driver.find_element(AppiumBy.XPATH, ios_xpath)
+                        el.click()
                     print(f"  ✅ [{role}/{platform}] '보이는 전화' 클릭 완료")
                     return True
                 except Exception:
@@ -1072,7 +1129,10 @@ class IxioAutomatedTest(
                     pass
         
         # 포트 정리 (다음 테스트 실행 준비)
-        for port in [8100, 8200, 8300]:
+        # ⚠️ 8100(WDA 터널)/8200은 종료하지 않음 — 반복 kill 시
+        #    macOS ACUDeviceServiceContext가 2회 재시작 한계 초과로 크래시.
+        #    WDA/터널은 다음 회차에 재사용하므로 살려둠.
+        for port in [8300]:
             self._free_port(port)
 
         print(f"\n{'='*60}\n")
@@ -1097,13 +1157,22 @@ class IxioAutomatedTest(
             # 1. 오디오 준비
             self.prepare_audio()
             
-            # 2. 디바이스 연결
-            # 화자1 (발신자)
-            if not self.setup_device(self.speaker1_device, 'speaker1', platform=self.speaker1_platform):
+            # 2. 디바이스 연결 (sp1/sp2 병렬 — WDA 빌드·IPA 설치 동시 진행)
+            import concurrent.futures as _cf
+            _sp1_ok = False
+            _sp2_ok = False
+            def _connect_sp1():
+                return self.setup_device(self.speaker1_device, 'speaker1', platform=self.speaker1_platform)
+            def _connect_sp2():
+                return self.setup_device(self.speaker2_device, 'speaker2', platform=self.speaker2_platform)
+            with _cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix='dev_setup') as _ex:
+                _f1 = _ex.submit(_connect_sp1)
+                _f2 = _ex.submit(_connect_sp2)
+                _sp1_ok = _f1.result()
+                _sp2_ok = _f2.result()
+            if not _sp1_ok:
                 return False
-            
-            # 화자2 (수신자)
-            if not self.setup_device(self.speaker2_device, 'speaker2', platform=self.speaker2_platform):
+            if not _sp2_ok:
                 print(f"⚠️ 화자2 연결 실패, 수동으로 전화를 받아주세요.")
 
             # 화자2 앱 상태 초기화 → 수신 시 전체화면 표시 보장
@@ -1504,9 +1573,26 @@ class IxioAutomatedTest(
             # 7. 오디오 재생 완료 대기 (통화 강제 종료 감지 포함)
             call_completed = self.wait_for_audio_completion()
 
-            # 발신단(iOS) 크래시 체크 — 통화/재생 중 충돌 발생 여부 확인
+            # 발신단(iOS) 크래시 체크 — Appium 세션 만료 시 page_source 블로킹 방지: 10초 타임아웃
             sp1_driver = self.drivers.get('speaker1')
-            if sp1_driver and self.crash_reporter and self.crash_reporter.detect_crash(sp1_driver):
+            _crash_detected = False
+            if sp1_driver and self.crash_reporter:
+                import threading as _th_cr
+                _cr_result = [False]
+                _cr_done = _th_cr.Event()
+                def _run_crash_check():
+                    try:
+                        _cr_result[0] = self.crash_reporter.detect_crash(sp1_driver)
+                    except Exception as _ce:
+                        print(f"⚠️ [CrashReporter] detect_crash 오류: {_ce}")
+                    finally:
+                        _cr_done.set()
+                _th_cr.Thread(target=_run_crash_check, daemon=True).start()
+                if not _cr_done.wait(timeout=10):
+                    print("⚠️ [CrashReporter] detect_crash 10초 타임아웃 — 크래시 없음으로 간주")
+                else:
+                    _crash_detected = _cr_result[0]
+            if _crash_detected:
                 self.crash_reporter.handle_crash(sp1_driver, extra_body="오디오 재생 완료 후 크래시 감지")
                 if self._mixer_recorder and self._mixer_recorder.is_recording:
                     self._mixer_recorder.stop()
@@ -1517,12 +1603,31 @@ class IxioAutomatedTest(
 
             # 7-1. 통화 녹음 종료 (오디오 완료 후, 통화 종료 전)
             _recorder_paths: dict = {}
+            _rec_target = None
             if self._mixer_recorder and self._mixer_recorder.is_recording:
-                _recorder_paths = self._mixer_recorder.stop()
+                _rec_target = self._mixer_recorder
             elif self._call_recorder and self._call_recorder.is_recording:
-                _recorder_paths = self._call_recorder.stop()
+                _rec_target = self._call_recorder
+            if _rec_target:
+                import threading as _th_rec
+                _rec_result = [{}]
+                _rec_done = _th_rec.Event()
+                def _run_rec_stop():
+                    try:
+                        _rec_result[0] = _rec_target.stop()
+                    except Exception as _re:
+                        print(f"⚠️ [Recorder] stop() 오류: {_re}")
+                    finally:
+                        _rec_done.set()
+                print("⏹️ 녹음 종료 중...")
+                _th_rec.Thread(target=_run_rec_stop, daemon=True).start()
+                if not _rec_done.wait(timeout=30):
+                    print("⚠️ [Recorder] stop() 30초 타임아웃 — 강제 진행")
+                else:
+                    _recorder_paths = _rec_result[0]
 
             # 8. 통화 종료
+            print("📵 end_call 호출 중...")
             self.end_call()
 
             # 8-1. 통화 종료 후 음원 수집 + 믹스

@@ -390,8 +390,11 @@ class MixerRecorder:
 
         # ── CONNECT 6 #1 (Android) 스트림 정지 ───────────────────────────────
         if self._stream:
-            self._stream.stop()
-            self._stream.close()
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception as _se:
+                print(f"⚠️ [MixerRecorder] Android 스트림 stop 오류 (무시): {_se}", flush=True)
             self._stream = None
         if self._drain_thr:
             self._drain_thr.join(timeout=2.0)
@@ -403,8 +406,11 @@ class MixerRecorder:
 
         # ── CONNECT 6 #2 (iOS) 스트림 정지 ───────────────────────────────────
         if self._ios_stream:
-            self._ios_stream.stop()
-            self._ios_stream.close()
+            try:
+                self._ios_stream.stop()
+                self._ios_stream.close()
+            except Exception as _se2:
+                print(f"⚠️ [MixerRecorder] iOS 스트림 stop 오류 (무시): {_se2}", flush=True)
             self._ios_stream = None
         if self._ios_drain_thr:
             self._ios_drain_thr.join(timeout=2.0)

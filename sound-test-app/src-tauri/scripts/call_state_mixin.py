@@ -161,7 +161,8 @@ class CallStateMixin:
     # ── 공통 대기 ────────────────────────────────────────────────────────────
 
     def wait_for_call_connecting_state(self, roles: 'list[str] | None' = None,
-                                       max_wait: int = 60) -> bool:
+                                       max_wait: int = 60,
+                                       poll_interval: float = 0.2) -> bool:
         """통화 연결 확인 (수신자가 실제로 수락한 이후에만 True 반환).
 
         roles: 확인할 역할 목록. None이면 speaker1+speaker2 모두 확인.
@@ -198,7 +199,7 @@ class CallStateMixin:
             elapsed = time.time() - start_time
             if elapsed >= 5 and int(elapsed) % 5 == 0:
                 print(f"  ⏳ {int(elapsed)}초 경과, 통화 연결 대기 중...")
-            time.sleep(0.2)
+            time.sleep(poll_interval)
 
         print(f"⚠️ {max_wait_time}초 내 통화 연결을 확인하지 못함\n")
         return False

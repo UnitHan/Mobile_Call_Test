@@ -167,9 +167,13 @@ def main() -> None:
                         help='iOS 앱 번들ID (버전 조회용). 미지정 시 ixiO 기본값')
     parser.add_argument('--filter', type=str, default=None,
                         help='라벨에 이 문자열이 포함된 음원만 분석 (예: 165651)')
+    parser.add_argument('--no-mos', action='store_true',
+                        help='MOS 측정 건너뜀 — 음단절 탐지만 수행 (TC_01~TC_04 설정에서 ON/OFF 가능)')
     args = parser.parse_args()
 
     limit = args.limit if args.limit > 0 else None  # 0 또는 음수 → 전체
+    if args.no_mos:
+        print("  ℹ️  --no-mos 설정됨 — MOS 측정 건너뜀 (음단절 탐지만 수행)")
 
     # 인수로 정답지 음원 / 대본 덮어쓰기
     # 화자별 정답지: --ref-path-ios / --ref-path-android 우선, 없으면 --ref-path 폴백
@@ -431,7 +435,8 @@ def main() -> None:
                 return {'error': str(e)}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _pp:
-            _f_mos         = _pp.submit(compute_mos_pesq, _mos_ref_ios_y, ios_y, and_y, _mos_ref_and_y) if (_has_ios or _has_and) else None
+            _run_mos = (not args.no_mos) and (_has_ios or _has_and)
+            _f_mos         = _pp.submit(compute_mos_pesq, _mos_ref_ios_y, ios_y, and_y, _mos_ref_and_y) if _run_mos else None
             _f_dropout_and = _pp.submit(_run_dropout_detect_and) if _can_detect_and else None
             _f_dropout_ios = _pp.submit(_run_dropout_detect_ios) if _can_detect_ios else None
             mos_result       = _f_mos.result() if _f_mos else {}

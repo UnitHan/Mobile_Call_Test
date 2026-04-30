@@ -199,7 +199,10 @@ def play(
         # blocksize 4096 : Python GIL 경쟁에 의한 버퍼 언더런 방지
         # (1024는 ~23ms 단위 → GIL/OS 스케줄러 지연으로 끊김 발생)
         chunk   = 4096
-        report_every = max(1, int(play_sr * 0.5 / chunk))
+        # AUDIO_PROGRESS 출력 간격: 5초마다 1회 (0.5초→5초 변경)
+        # 0.5초 간격 시 75초 오디오 × 2스피커 = ~350회 flush=True 출력 →
+        # Tauri IPC 통해 UI 렌더러로 전달되어 장시간 테스트 시 화면 먹통 유발.
+        report_every = max(1, int(play_sr * 5.0 / chunk))
         counter = 0
 
         # ── 재생 ────────────────────────────────────────────────────────────

@@ -287,6 +287,27 @@ class IosCallHandlerMixin:
                 time.sleep(0.05)
             print(f"  ✓ iOS 키패드 잔류 번호 단타 삭제 완료 ({digit_count}자리)")
 
+        # ─── 삭제 후 키패드 이탈 방지 ──────────────────────────────────────
+        # ixiO 앱: 필드가 비워지면 자동으로 최근통화 화면으로 이동하는 경우 있음
+        # 삭제 직후 키패드가 사라졌으면 키패드 탭으로 재진입
+        time.sleep(0.2)
+        if not self._is_on_keypad(driver, timeout=0):
+            print(f"  ↩️ 삭제 후 키패드 이탈 감지 → 키패드 탭 재진입")
+            self._navigate_to_keypad_tab(driver)
+            time.sleep(0.5)
+
+    @staticmethod
+    def _ios_wake_screen(driver) -> None:
+        """iPhone 화면이 꺼져 있으면 깨웁니다 (activate_app 전 필수 호출).
+
+        'mobile: unlock' 명령으로 잠금 해제 시도.
+        장치가 이미 켜져 있으면 무해하게 통과.
+        """
+        try:
+            driver.execute_script('mobile: unlock')
+        except Exception:
+            pass
+
     def open_keypad_iphone(self, device_type='speaker1'):
         """iPhone 익시오 앱에서 키패드 화면을 엽니다.
 
@@ -302,6 +323,7 @@ class IosCallHandlerMixin:
         print(f"📱 {device_type}: 익시오 앱 키패드 열기...")
 
         # ── Step 0: 앱 포그라운드 전환 (terminate 없이 — 콜드 스타트 방지) ──
+        self._ios_wake_screen(driver)  # 화면이 꺼진 경우 먼저 깨우기
         try:
             driver.activate_app(bundle)
             print(f"  ✓ 익시오 앱 활성화")
@@ -310,20 +332,27 @@ class IosCallHandlerMixin:
 
         # ── Step 1: 이미 키패드 화면이면 잔류 번호만 지우고 반환 ────────────
         if self._is_on_keypad(driver, timeout=3.0):
-            self._clear_dial_field_ios(driver)
+            self._clear_dial_field_ios(driver)  # 내부에서 이탈 시 자동 재진입
+            if not self._is_on_keypad(driver, timeout=2.0):
+                # _clear_dial_field_ios 내부 재진입 실패 시 한번 더 시도
+                self._navigate_to_keypad_tab(driver)
             print(f"✅ 키패드 화면 확인\n")
             return True
 
         # ── Step 2: 키패드 탭 클릭 ────────────────────────────────────────
         if self._navigate_to_keypad_tab(driver):
-            self._clear_dial_field_ios(driver)
+            self._clear_dial_field_ios(driver)  # 내부에서 이탈 시 자동 재진입
+            if not self._is_on_keypad(driver, timeout=2.0):
+                self._navigate_to_keypad_tab(driver)
             print(f"✅ 키패드 열기 완료\n")
             return True
 
         # ── Step 3: 시스템 알림(iMessage/FaceTime 등)이 막고 있을 수 있음 ──
         self._dismiss_ios_system_alerts(driver)
         if self._is_on_keypad(driver, timeout=2.0) or self._navigate_to_keypad_tab(driver):
-            self._clear_dial_field_ios(driver)
+            self._clear_dial_field_ios(driver)  # 내부에서 이탈 시 자동 재진입
+            if not self._is_on_keypad(driver, timeout=2.0):
+                self._navigate_to_keypad_tab(driver)
             print(f"✅ 키패드 열기 완료 (알림 닫기 후)\n")
             return True
 
@@ -335,6 +364,7 @@ class IosCallHandlerMixin:
         except Exception as e:
             print(f"  ⚠️ terminate_app 실패: {e}")
         time.sleep(1)
+        self._ios_wake_screen(driver)  # 재시작 전 화면 wake
         try:
             driver.activate_app(bundle)
             print(f"  ✓ 앱 재실행")
@@ -606,6 +636,7 @@ class IosCallHandlerMixin:
                     try:
                         driver.terminate_app(self._ios_bundle)
                         time.sleep(1)
+                        self._ios_wake_screen(driver)  # 재시작 전 화면 wake
                         driver.activate_app(self._ios_bundle)
                     except Exception:
                         pass
@@ -635,10 +666,15 @@ class IosCallHandlerMixin:
             for attempt in range(1, MAX_DIAL_ATTEMPTS + 1):
                 if attempt > 1:
                     print(f"  🔄 재시도 {attempt}/{MAX_DIAL_ATTEMPTS} — 키패드 재진입 + 잔류번호 삭제")
-                    self._clear_dial_field_ios(driver)
-                    time.sleep(0.3)
                     self._navigate_to_keypad_tab(driver)
-                    time.sleep(1.0)
+                    time.sleep(0.5)
+                else:
+                    # 첫 시도에도 잔류 번호 초기화 (이전 테스트 번호 누적 방지)
+                    print(f"  🧹 입력 전 다이얼 필드 초기화...")
+                self._clear_dial_field_ios(driver)  # 모든 시도에서 항상 초기화
+                if not self._is_on_keypad(driver, timeout=2.0):
+                    self._navigate_to_keypad_tab(driver)
+                time.sleep(0.5)
 
                 # ── 에이닷 전화: full AID 직접 클릭 (page_source 1회 파싱) ──
                 if self._ios_bundle in self._ADOT_BUNDLES:
@@ -715,7 +751,11 @@ class IosCallHandlerMixin:
             # ── 입력 결과 검증 — "보이면 누른다" 원칙: 입력된 값이 맞는지 확인 ─
             if miss_count == 0:
                 if not self._verify_dial_field_ios(driver, phone_number):
-                    print(f"  ⚠️ 다이얼 필드 검증 실패 — 입력은 성공했으나 표시 불일치")
+                    print(f"  ⚠️ 다이얼 필드 검증 실패 — 잔류 번호 누적 가능성, 초기화 후 재발신 필요")
+                    # 잘못된 번호로 발신하면 RINGING 미감지 → 필드 초기화 후 abort
+                    self._clear_dial_field_ios(driver)
+                    print(f"  ❌ 다이얼 필드 불일치로 발신 취소 (번호 누적)")
+                    return False
             if miss_count > 0:
                 print(f"  ❌ {MAX_DIAL_ATTEMPTS}회 시도 후에도 {miss_count}자리 입력 실패")
                 if miss_count > len(phone_number) // 2:

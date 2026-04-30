@@ -640,11 +640,28 @@ def collect_ios_recording(
     if ios_driver is not None:
         for remote_dir in candidates:
             try:
-                # 디렉토리 내 파일 목록 조회 (listDirectory는 XCUITest 전용)
-                files: list[str] = ios_driver.execute_script(
-                    'mobile: listDirectory',
-                    {'bundleId': bundle_id, 'path': remote_dir}
-                )
+                # 디렉토리 내 파일 목록 조회 — WDA 연결 끊김 시 무한 대기 방지: 15초 타임아웃
+                import threading as _th_pull
+                _list_result: list = [None]
+                _list_done = _th_pull.Event()
+                def _do_list(_dir=remote_dir):
+                    try:
+                        _list_result[0] = ios_driver.execute_script(
+                            'mobile: listDirectory',
+                            {'bundleId': bundle_id, 'path': _dir}
+                        )
+                    except Exception as _le:
+                        _list_result[0] = _le
+                    finally:
+                        _list_done.set()
+                _th_pull.Thread(target=_do_list, daemon=True).start()
+                if not _list_done.wait(timeout=15):
+                    print(f"  ⚠️ [iOS] Appium listDirectory 15초 타임아웃 ({remote_dir}) — 건너뜀")
+                    continue
+                files = _list_result[0]
+                if isinstance(files, Exception):
+                    print(f"  ⚠️ Appium listDirectory 오류 ({remote_dir}): {files}")
+                    continue
                 if not isinstance(files, list):
                     continue
                 # 가장 최신 WAV/m4a 파일 선택
@@ -656,7 +673,24 @@ def collect_ios_recording(
                     continue
                 remote_file = f'@{bundle_id}/{remote_dir}{audio_files[0]}'
                 print(f"  📦 Appium pull: {remote_file}")
-                data_b64: str = ios_driver.pull_file(remote_file)
+                # pull_file도 WDA 연결 끊김 시 블로킹 — 30초 타임아웃
+                _pull_result: list = [None]
+                _pull_done = _th_pull.Event()
+                def _do_pull(_rf=remote_file):
+                    try:
+                        _pull_result[0] = ios_driver.pull_file(_rf)
+                    except Exception as _pe:
+                        _pull_result[0] = _pe
+                    finally:
+                        _pull_done.set()
+                _th_pull.Thread(target=_do_pull, daemon=True).start()
+                if not _pull_done.wait(timeout=30):
+                    print(f"  ⚠️ [iOS] Appium pull_file 30초 타임아웃 — 건너뜀")
+                    continue
+                data_b64 = _pull_result[0]
+                if isinstance(data_b64, Exception):
+                    print(f"  ⚠️ Appium pull_file 오류: {data_b64}")
+                    continue
                 import base64
                 raw = base64.b64decode(data_b64)
                 local_path.write_bytes(raw)

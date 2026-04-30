@@ -25,15 +25,56 @@ C:\Python312;C:\Python311;C:\Python310;\
     #[cfg(not(windows))]
     {
         let home = std::env::var("HOME").unwrap_or_default();
-        let extras = format!(
-            "/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:\
-/usr/bin:/bin:/usr/sbin:/sbin:\
-{home}/.nvm/versions/node/$(ls {home}/.nvm/versions/node 2>/dev/null | tail -1)/bin:\
-{home}/Library/Android/sdk/platform-tools:\
-{home}/.local/bin",
-            home = home
-        );
-        if current.is_empty() { extras } else { format!("{}:{}", extras, current) }
+
+        // nvm 활성 버전 탐지: ~/.nvm/versions/node 아래 디렉토리 중 최신 1개
+        let nvm_bin = {
+            let nvm_dir = std::path::Path::new(&home).join(".nvm/versions/node");
+            if nvm_dir.is_dir() {
+                let mut entries: Vec<_> = std::fs::read_dir(&nvm_dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .filter(|e| e.path().is_dir())
+                    .collect();
+                entries.sort_by_key(|e| e.file_name());
+                entries.last()
+                    .map(|e| e.path().join("bin").to_string_lossy().to_string())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            }
+        };
+
+        // ANDROID_HOME / ANDROID_SDK_ROOT 환경변수 우선, 없으면 macOS 기본 경로
+        let android_sdk = if let Ok(v) = std::env::var("ANDROID_HOME") {
+            if !v.is_empty() { v } else { format!("{}/Library/Android/sdk", home) }
+        } else if let Ok(v) = std::env::var("ANDROID_SDK_ROOT") {
+            if !v.is_empty() { v } else { format!("{}/Library/Android/sdk", home) }
+        } else {
+            format!("{}/Library/Android/sdk", home)
+        };
+
+        let mut parts = vec![
+            "/usr/local/bin".to_string(),
+            "/opt/homebrew/bin".to_string(),
+            "/opt/homebrew/sbin".to_string(),
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+            format!("{}/platform-tools", android_sdk),
+            format!("{}/tools/bin", android_sdk),
+            format!("{}/tools", android_sdk),
+            format!("{}/.local/bin", home),
+            format!("{}/.cargo/bin", home),
+        ];
+        if !nvm_bin.is_empty() {
+            parts.push(nvm_bin);
+        }
+        if !current.is_empty() {
+            parts.push(current);
+        }
+        parts.join(":")
     }
 }
 

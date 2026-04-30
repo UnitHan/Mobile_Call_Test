@@ -173,11 +173,35 @@ class TcBase(IxioAutomatedTest):
                     print("  ✓ 앱 종료 완료")
                 except Exception:
                     print("  ℹ️ 앱이 실행 중이 아님 (종료 건너뜀)")
+                try:
+                    sp2_drv.execute_script('mobile: unlock')  # 화면 꺼진 경우 깨우기
+                except Exception:
+                    pass
                 sp2_drv.activate_app(_ios_bundle)
                 time.sleep(2)
                 print("  ✓ 화자2(iOS) 앱 메인화면 진입 완료")
             except Exception as e:
-                print(f"  ⚠️ 앱 재실행 실패: {e}")
+                _emsg = str(e)
+                if 'Session does not exist' in _emsg or 'invalid session id' in _emsg.lower():
+                    print(f"  ⚠️ 화자2 Appium 세션 만료 — 세션 재생성 시도...")
+                    try:
+                        ok = self.setup_device(self.speaker2_device, 'speaker2', platform='iOS')
+                        if ok:
+                            print("  ✅ 화자2 Appium 세션 재생성 성공")
+                            sp2_drv = self.drivers['speaker2']
+                            try:
+                                sp2_drv.execute_script('mobile: unlock')
+                            except Exception:
+                                pass
+                            sp2_drv.activate_app(_ios_bundle)
+                            time.sleep(2)
+                            print("  ✓ 화자2(iOS) 앱 메인화면 진입 완료 (재세션)")
+                        else:
+                            print(f"  ❌ 화자2 세션 재생성 실패")
+                    except Exception as re:
+                        print(f"  ❌ 화자2 세션 재생성 중 오류: {re}")
+                else:
+                    print(f"  ⚠️ 앱 재실행 실패: {e}")
 
     def _relaunch_ixio_speaker1(self):
         """화자1 디바이스에서 테스트 대상 앱을 종료 → 재실행 (키패드 버튼 표시 보장)."""
@@ -213,11 +237,35 @@ class TcBase(IxioAutomatedTest):
                     print("  ✓ 앱 종료 완료")
                 except Exception:
                     print("  ℹ️ 앱이 실행 중이 아님 (종료 건너뜀)")
+                try:
+                    sp1_drv.execute_script('mobile: unlock')  # 화면 꺼진 경우 깨우기
+                except Exception:
+                    pass
                 sp1_drv.activate_app(_ios_bundle)
                 time.sleep(2)
                 print("  ✓ 화자1(iOS) 앱 메인화면 진입 완료")
             except Exception as e:
-                print(f"  ⚠️ 앱 재실행 실패: {e}")
+                _emsg = str(e)
+                if 'Session does not exist' in _emsg or 'invalid session id' in _emsg.lower():
+                    print(f"  ⚠️ 화자1 Appium 세션 만료 — 세션 재생성 시도...")
+                    try:
+                        ok = self.setup_device(self.speaker1_device, 'speaker1', platform='iOS')
+                        if ok:
+                            print("  ✅ 화자1 Appium 세션 재생성 성공")
+                            sp1_drv = self.drivers['speaker1']
+                            try:
+                                sp1_drv.execute_script('mobile: unlock')
+                            except Exception:
+                                pass
+                            sp1_drv.activate_app(_ios_bundle)
+                            time.sleep(2)
+                            print("  ✓ 화자1(iOS) 앱 메인화면 진입 완료 (재세션)")
+                        else:
+                            print(f"  ❌ 화자1 세션 재생성 실패")
+                    except Exception as re:
+                        print(f"  ❌ 화자1 세션 재생성 중 오류: {re}")
+                else:
+                    print(f"  ⚠️ 앱 재실행 실패: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════
     #  Phase 2: 발신 (Android / iOS)
@@ -315,7 +363,9 @@ class TcBase(IxioAutomatedTest):
                     return ts
             except Exception:
                 pass
-            time.sleep(0.1)
+            # ⚠️ 100ms 폴링은 WDA에 ~50회/5s 요청 → CallKit PiP 활성 시 WDA 과부하.
+            # 500ms로 줄여도 5초 내 충분히 감지 가능 (타이머는 연결 즉시 00:01부터 시작).
+            time.sleep(0.5)
         print(f"  ⚠️ [iOS 타이머] {timeout:.0f}초 내 미감지 → OFFHOOK 기준으로 폴백 (poll={poll}회)")
         return offhook_ts
 
@@ -355,7 +405,12 @@ class TcBase(IxioAutomatedTest):
         if self.speaker1_platform == 'iOS' and 'speaker1' in self.drivers:
             _sp1_drv = self.drivers.get('speaker1')
             def _check_sp1(_drv=_sp1_drv):
-                ok = self.wait_for_call_connecting_state(roles=['speaker1'])
+                # ⚠️ CallKit PiP 활성 시 iOS WDA page_source가 각 호출마다 XCUITest
+                # 전체 snapshot을 재생성하므로 200ms 간격이면 ~300회/60s 요청 → WDA 과부하.
+                # poll_interval=1.5s + max_wait=20s → 최대 13회로 제한.
+                ok = self.wait_for_call_connecting_state(
+                    roles=['speaker1'], max_wait=20, poll_interval=1.5,
+                )
                 print(f"  [sp1 확인] {'✅ 발신단(iOS) 타이머 00:00 확인' if ok else '⚠️ 발신단(iOS) 연결 확인 불가'}")
                 self._tap_video_call_popup(_drv, 'speaker1', 'iOS', timeout=15.0)
             threading.Thread(target=_check_sp1, daemon=True).start()
@@ -542,16 +597,56 @@ class TcBase(IxioAutomatedTest):
         # 7. 오디오 재생 완료 대기
         call_completed = self.wait_for_audio_completion()
 
-        # 크래시 체크
+        # 크래시 체크 — Appium 세션 만료 시 page_source 블로킹 방지: 10초 타임아웃
         sp1_driver = self.drivers.get('speaker1')
-        if sp1_driver and self.crash_reporter and self.crash_reporter.detect_crash(sp1_driver):
+        _crash_detected = False
+        if sp1_driver and self.crash_reporter:
+            import threading as _th_cr2
+            _cr2_result = [False]
+            _cr2_done = _th_cr2.Event()
+            def _run_crash_check2():
+                try:
+                    _cr2_result[0] = self.crash_reporter.detect_crash(sp1_driver)
+                except Exception as _ce2:
+                    print(f"⚠️ [CrashReporter] detect_crash 오류: {_ce2}")
+                finally:
+                    _cr2_done.set()
+            _th_cr2.Thread(target=_run_crash_check2, daemon=True).start()
+            if not _cr2_done.wait(timeout=10):
+                print("⚠️ [CrashReporter] detect_crash 10초 타임아웃 — 크래시 없음으로 간주")
+            else:
+                _crash_detected = _cr2_result[0]
+        if _crash_detected:
             self.crash_reporter.handle_crash(sp1_driver, extra_body="오디오 재생 완료 후 크래시 감지")
             self._stop_recording()
             self.end_call()
             return 'crash'
 
         # 7-1. 녹음 종료
-        _recorder_paths = self._stop_recording()
+        _rec_target2 = None
+        if hasattr(self, '_mixer_recorder') and self._mixer_recorder and self._mixer_recorder.is_recording:
+            _rec_target2 = self._mixer_recorder
+        elif hasattr(self, '_call_recorder') and self._call_recorder and self._call_recorder.is_recording:
+            _rec_target2 = self._call_recorder
+        if _rec_target2:
+            import threading as _th_rec2
+            _rec2_result = [{}]
+            _rec2_done = _th_rec2.Event()
+            def _run_rec_stop2():
+                try:
+                    _rec2_result[0] = _rec_target2.stop()
+                except Exception as _re2:
+                    print(f"⚠️ [Recorder] stop() 오류: {_re2}")
+                finally:
+                    _rec2_done.set()
+            print("⏹️ 녹음 종료 중...")
+            _th_rec2.Thread(target=_run_rec_stop2, daemon=True).start()
+            if not _rec2_done.wait(timeout=30):
+                print("⚠️ [Recorder] stop() 30초 타임아웃 — 강제 진행")
+            else:
+                _recorder_paths = _rec2_result[0]
+        else:
+            _recorder_paths = self._stop_recording()
 
         # 8. 통화 종료
         self.end_call()

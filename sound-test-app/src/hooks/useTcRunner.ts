@@ -878,6 +878,9 @@ export function useTcRunner(
             androidAppPkg = aApp?.package ?? null;
             iosAppBid = iApp?.bundleId ?? null;
           } catch { /* fallback */ }
+          // MOS 측정 ON/OFF 설정 읽기 (기본: ON)
+          const mosMeasurementEnabled = localStorage.getItem("mosMeasurementEnabled") !== "false";
+          const skipMos = !mosMeasurementEnabled && !isMosOnly;
           const analysisResult = await invoke<DropoutAnalysisResult>("run_dropout_analysis", {
             refAudioPathS1: effectiveRefS1,
             refAudioPathS2: effectiveRefS2,
@@ -887,6 +890,7 @@ export function useTcRunner(
             appTag,
             androidAppPackage: androidAppPkg,
             iosAppBundleId: iosAppBid,
+            skipMos,
           });
           // TC_00(MOS 전용): report_path 없음 — MOS 세션 보고서만 별도 생성
           if (!isMosOnly && analysisResult.report_path) {

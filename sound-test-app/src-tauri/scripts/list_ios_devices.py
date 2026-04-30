@@ -18,7 +18,6 @@ import json
 import re
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def _get_local_ip(hostnames: list[str]) -> str:
@@ -54,27 +53,6 @@ def _get_local_ip(hostnames: list[str]) -> str:
     return ''
 
 
-def _process_device(dev: dict) -> tuple[str, str] | None:
-    """단일 기기를 처리해 (udid, label) 반환. 유효하지 않으면 None."""
-    conn      = dev.get('connectionProperties', {})
-    udid      = dev.get('hardwareProperties', {}).get('udid', '')
-    name      = dev.get('deviceProperties', {}).get('name', 'iPhone')
-    transport = conn.get('transportType', '')
-    hostnames = conn.get('localHostnames', conn.get('potentialHostnames', []))
-    if not udid:
-        return None
-
-    if transport == 'localNetwork':
-        ip = _get_local_ip(hostnames)
-        label = f'{name} ({ip})' if ip else f'{name} (무선)'
-    elif transport == 'wired':
-        label = f'{name} (유선)'
-    else:
-        label = name
-
-    return udid, label
-
-
 def parse_devicectl_json(json_path: str) -> None:
     """devicectl JSON을 파싱해 `{udid}|{label}` 형식으로 stdout에 출력합니다."""
     try:
@@ -84,22 +62,31 @@ def parse_devicectl_json(json_path: str) -> None:
         print(f'ERR:{e}', file=sys.stderr)
         return
 
-    devs = data.get('result', {}).get('devices', [])
-    # dns-sd 조회를 병렬 실행해 전체 대기 시간을 줄입니다 (기기 수 × 3초 → 3초)
-    results: dict[int, tuple[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=len(devs) or 1) as pool:
-        futures = {pool.submit(_process_device, dev): i for i, dev in enumerate(devs)}
-        for fut in as_completed(futures):
-            idx = futures[fut]
-            try:
-                result = fut.result()
-                if result:
-                    results[idx] = result
-            except Exception:
-                pass
-    # 원래 순서대로 출력
-    for idx in sorted(results):
-        udid, label = results[idx]
+    for dev in data.get('result', {}).get('devices', []):
+        conn      = dev.get('connectionProperties', {})
+        tunnel    = conn.get('tunnelState', '')          # connected / disconnected / unavailable
+        pairing   = conn.get('pairingState', '')         # paired / unpaired
+        udid      = dev.get('hardwareProperties', {}).get('udid', '')
+        name      = dev.get('deviceProperties', {}).get('name', 'iPhone')
+        transport = conn.get('transportType', '')
+        hostnames = conn.get('localHostnames', conn.get('potentialHostnames', []))
+
+        # pairingState == 'paired' 이면 tunnelState 무관하게 표시
+        # (disconnected = 무선 등록됐지만 현재 터널 미연결, unavailable = 비활성)
+        if pairing != 'paired' or not udid:
+            continue
+
+        if transport == 'localNetwork':
+            ip = _get_local_ip(hostnames)
+            if tunnel == 'connected':
+                label = f'{name} (무선 {ip})' if ip else f'{name} (무선)'
+            else:
+                label = f'{name} (무선-페어링됨 {ip})' if ip else f'{name} (무선-페어링됨)'
+        elif transport == 'wired':
+            label = f'{name} (유선)'
+        else:
+            label = f'{name} (페어링됨)'
+
         print(f'{udid}|{label}', flush=True)
 
 

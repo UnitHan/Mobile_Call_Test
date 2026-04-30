@@ -116,7 +116,7 @@ export function AppHeader({
         {isRunning && <span className="status-tag tag-running">{t("header.statusRunning")}</span>}
         {isDone && <span className="status-tag tag-done">{t("header.statusDone")}</span>}
         {isRepeating && <span className="status-tag tag-repeat">{currentRepeat}/{totalRepeat}</span>}
-        {statusMessage || t("header.statusReady")}
+        {isDone ? t("status.tcComplete") : (statusMessage || t("header.statusReady"))}
       </span>
       <div className="app-selector-group">
         <select

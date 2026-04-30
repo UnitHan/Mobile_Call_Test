@@ -13,15 +13,8 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
-
-try:
-    import config as _cfg
-    _WDA_EXTRA_SUBNETS: list = getattr(_cfg, 'WDA_SUBNETS', []) or []
-    _WDA_SCAN_TIMEOUT: float = getattr(_cfg, 'WDA_SCAN_TIMEOUT', 1.5)
-except ImportError:
-    _WDA_EXTRA_SUBNETS = []
-    _WDA_SCAN_TIMEOUT = 1.5
 
 _TMP = tempfile.gettempdir()
 
@@ -37,19 +30,10 @@ class IosWdaManager:
     """iPhone WDA URL 감지·기동·정리를 담당하는 단일 책임 클래스."""
 
     def __init__(self, wda_port: int = 8100):
-        # config.py의 WDA_IP_OVERRIDE가 있으면 초기 캐시로 사용
-        try:
-            import config as _cfg
-            override = getattr(_cfg, 'WDA_IP_OVERRIDE', None)
-            bonjour_host = getattr(_cfg, 'IPHONE_BONJOUR_HOST', None) or None
-        except ImportError:
-            override = None
-            bonjour_host = None
-        self._cached_iphone_ip: str | None = override or None
-        # dns-sd에 사용할 Bonjour 호스트명 캐시 (예: "iPhone-17-Pro.local")
-        # → 한 번 성공하면 저장, 다음 실행에서 devicectl 없이 바로 dns-sd 조회
-        self._cached_bonjour_host: str | None = bonjour_host
+        self._cached_iphone_ip: str | None = None
         self.wda_port = wda_port
+        self._watchdog_stop: threading.Event | None = None
+        self._watchdog_thread: threading.Thread | None = None
 
     # ─────────────────────────────────────────────────────────────────────────
     # 공용 API
@@ -94,6 +78,7 @@ class IosWdaManager:
                     if hw.get('udid', '') != udid:
                         continue
                     tunnel_ip = dev.get('connectionProperties', {}).get('tunnelIPAddress', '')
+                    device_uuid = dev.get('identifier', '')
                     if tunnel_ip:
                         ipv6_url = f'http://[{tunnel_ip}]:8100'
                         ip = _wda_ipv4_from_status(ipv6_url)
@@ -120,100 +105,57 @@ class IosWdaManager:
                                 print(f"  ⚠️ IPv6 tunnel 통신 가능하나 IPv4 추출 실패 → 서브넷 스캔으로 전환")
                         except Exception:
                             pass
+
+                        # ── WDA 미실행 상태 → setup_wda_iphone.sh 로 기동 ──
+                        if device_uuid and udid:
+                            wda_url = self._launch_wda_via_sh_script(udid)
+                            if wda_url:
+                                import re as _re
+                                _m = _re.search(r'http://(\d+\.\d+\.\d+\.\d+):', wda_url)
+                                ip = _m.group(1) if _m else None
+                                if ip:
+                                    print(f"  ✅ WDA sh 기동 완료 → IPv4: {ip}")
+                                    self._cached_iphone_ip = ip
+                                    return ip
+                                # IPv6 URL → WDA 기동됐으므로 /status에서 ios.ip 재추출
+                                ip = _wda_ipv4_from_status(wda_url)
+                                if ip:
+                                    print(f"  ✅ WDA sh 기동 완료 (IPv6→IPv4): {ip}")
+                                    self._cached_iphone_ip = ip
+                                    return ip
+                                print(f"  ⚠️ sh 반환 URL에서 IPv4 추출 실패 ({wda_url}) → 서브넷 스캔")
+                            else:
+                                print(f"  ⚠️ setup_wda_iphone.sh 실패 → 서브넷 스캔으로 전환")
+
+                    elif device_uuid and not tunnel_ip and udid:
+                        # tunnelIPAddress 없음 (USB 신연결 등) → sh 스크립트로 WDA 기동
+                        wda_url = self._launch_wda_via_sh_script(udid)
+                        if wda_url:
+                            import re as _re
+                            _m = _re.search(r'http://(\d+\.\d+\.\d+\.\d+):', wda_url)
+                            ip = _m.group(1) if _m else None
+                            if ip:
+                                print(f"  ✅ WDA sh 기동 완료 → IPv4: {ip}")
+                                self._cached_iphone_ip = ip
+                                return ip
+                            # IPv6 URL → WDA 기동됐으므로 /status에서 ios.ip 재추출
+                            ip = _wda_ipv4_from_status(wda_url)
+                            if ip:
+                                print(f"  ✅ WDA sh 기동 완료 (IPv6→IPv4): {ip}")
+                                self._cached_iphone_ip = ip
+                                return ip
+                            print(f"  ⚠️ sh 반환 URL에서 IPv4 추출 실패 ({wda_url}) → 서브넷 스캔")
+                        else:
+                            print(f"  ⚠️ setup_wda_iphone.sh 실패 → 서브넷 스캔으로 전환")
             except Exception as e:
                 print(f"  ⚠️ devicectl tunnelIP 조회 실패: {e}")
 
-        # ── 1-b. dns-sd로 Wi-Fi IP 조회 (WDA 불필요) ─────────────────────────────
-        # 캐시된 Bonjour 호스트명이 있으면 devicectl 없이 바로 조회 (빠른 경로).
-        # 없으면 devicectl potentialHostnames에서 .coredevice.local → .local 변환.
-        import re as _re2
-
-        def _dns_sd_resolve(local_h: str) -> str | None:
-            """dns-sd -G v4로 사설 IP를 반환. 없으면 None."""
-            try:
-                dr = subprocess.run(
-                    ['dns-sd', '-G', 'v4', local_h],
-                    capture_output=True, timeout=5,
-                )
-                out = (dr.stdout or b'').decode(errors='ignore')
-            except subprocess.TimeoutExpired as te:
-                out = (te.stdout or b'').decode(errors='ignore')
-            except Exception:
-                return None
-            for m in _re2.finditer(r'(\d+\.\d+\.\d+\.\d+)', out):
-                ip = m.group(1)
-                parts = ip.split('.')
-                if (ip.startswith('192.168.')
-                        or ip.startswith('10.')
-                        or (ip.startswith('172.') and 16 <= int(parts[1]) <= 31)):
-                    return ip
-            return None
-
-        # 빠른 경로: 이전에 성공한 Bonjour 호스트명 재사용
-        if self._cached_bonjour_host:
-            ip = _dns_sd_resolve(self._cached_bonjour_host)
-            if ip:
-                print(f"  📡 iPhone Wi-Fi IP (dns-sd 캐시): {ip}")
-                self._cached_iphone_ip = ip
-                return ip
-            print(f"  ℹ️  dns-sd 캐시 호스트({self._cached_bonjour_host}) 응답 없음 → devicectl 재조회")
-
-        # 느린 경로: devicectl에서 Bonjour 호스트명 획득 후 dns-sd 조회
-        if udid:
-            try:
-                tmp = os.path.join(_TMP, '_devicectl_ip.json')
-                r = subprocess.run(
-                    ['xcrun', 'devicectl', 'list', 'devices', '--json-output', tmp],
-                    capture_output=True, timeout=8
-                )
-                if r.returncode == 0:
-                    with open(tmp) as f:
-                        data = _json.load(f)
-                    for dev in data.get('result', {}).get('devices', []):
-                        hw = dev.get('hardwareProperties', {})
-                        if hw.get('udid', '') != udid:
-                            continue
-                        conn = dev.get('connectionProperties', {})
-                        hostnames = conn.get('potentialHostnames', conn.get('localHostnames', []))
-                        for h in hostnames:
-                            if not h.endswith('.coredevice.local'):
-                                continue
-                            local_h = h[:-len('.coredevice.local')] + '.local'
-                            ip = _dns_sd_resolve(local_h)
-                            if ip:
-                                print(f"  📡 iPhone Wi-Fi IP (dns-sd): {ip}")
-                                self._cached_iphone_ip = ip
-                                self._cached_bonjour_host = local_h  # ← 다음 호출에서 재사용
-                                return ip
-                        break  # UDID 매칭 완료
-                else:
-                    print(f"  ⚠️ devicectl list 실패 (returncode={r.returncode})")
-            except Exception as e:
-                print(f"  ⚠️ dns-sd IP 조회 실패: {e}")
-
-        # ── 1-c. 캐시 IP에 ping → arp에서 MAC 확보 후 재검증 (WDA 불필요) ──────
-        # WDA_IP_OVERRIDE나 이전 세션 캐시 IP가 있으면 ping으로 arp를 갱신하고
-        # 해당 IP가 현재 네트워크에 살아있는지 확인한다.
-        if self._cached_iphone_ip:
-            cached_ip = self._cached_iphone_ip
-            try:
-                ping_r = subprocess.run(
-                    ['ping', '-c', '1', '-W', '1000', cached_ip],
-                    capture_output=True, timeout=3
-                )
-                if ping_r.returncode == 0:
-                    print(f"  📡 iPhone IP (ping 생존 확인): {cached_ip}")
-                    return cached_ip
-            except Exception:
-                pass
-
-        # ── 2. 서브넷 병렬 스캔 (WDA 실행 중일 때만 성공) ────────────────
+        # ── 2. 서브넷 병렬 스캔 ──────────────────────────────────────────
         cached = self._cached_iphone_ip
         subnets: list[str] = []
         if cached and '.' in str(cached):
             subnets.append(str(cached).rsplit('.', 1)[0])
-        _default_subnets = ['192.168.219', '192.168.0', '192.168.1', '10.0.0', '172.16.0']
-        subnets = _WDA_EXTRA_SUBNETS + subnets + [s for s in _default_subnets if s not in _WDA_EXTRA_SUBNETS]
+        subnets += ['192.168.219', '192.168.0', '192.168.1', '10.0.0', '172.16.0']
         seen: set[str] = set()
         ordered_subnets = []
         for s in subnets:
@@ -223,7 +165,7 @@ class IosWdaManager:
 
         def probe(ip: str) -> str | None:
             try:
-                with urllib.request.urlopen(f'http://{ip}:8100/status', timeout=_WDA_SCAN_TIMEOUT) as r:
+                with urllib.request.urlopen(f'http://{ip}:8100/status', timeout=1.5) as r:
                     data = _json.loads(r.read())
                     val = data.get('value', data)
                     if val.get('ready') or val.get('state') == 'success':
@@ -290,16 +232,103 @@ class IosWdaManager:
         print(f"  ⚠️ iOS 버전 자동 감지 실패 → 기본값 18.0 사용")
         return '18.0'
 
+    def _sh_script_path(self) -> str:
+        """setup_wda_iphone.sh 절대 경로 반환."""
+        return os.path.normpath(
+            os.path.join(os.path.dirname(__file__), '..', '..', '..', 'setup_wda_iphone.sh')
+        )
+
+    def _launch_wda_via_sh_script(self, udid: str) -> str | None:
+        """setup_wda_iphone.sh 를 실행해 WDA 기동 → localhost:8100 반환.
+
+        스크립트가 iproxy 포트포워딩까지 처리하므로
+        성공 시 WDA URL = http://localhost:8100
+        """
+        import urllib.request
+        sh = self._sh_script_path()
+        if not os.path.isfile(sh):
+            print(f"  ⚠️ setup_wda_iphone.sh 없음: {sh}")
+            return None
+        print(f"  🚀 setup_wda_iphone.sh 실행 중...")
+        env = os.environ.copy()
+        env['WDA_PORT'] = str(self.wda_port)
+        if udid:
+            env['TARGET_UDID'] = udid
+        proc = subprocess.Popen(
+            ['bash', sh],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, env=env
+        )
+        # 실시간 출력 + localhost 응답 감지
+        wda_url = None
+        for line in proc.stdout:  # type: ignore[union-attr]
+            line = line.rstrip()
+            if line:
+                print(f"  [sh] {line}")
+            if 'WDA_URL' in line and 'http://' in line:
+                import re
+                m = re.search(r'http://[^\s]+', line)
+                if m:
+                    wda_url = m.group(0)
+        proc.wait()
+        if proc.returncode != 0 and wda_url is None:
+            print(f"  ⚠️ setup_wda_iphone.sh 종료 코드: {proc.returncode}")
+        # sh 출력의 WDA_URL이 IPv4이면 그 URL 직접 확인 후 반환
+        if wda_url:
+            import re as _re
+            _m = _re.search(r'http://(\d+\.\d+\.\d+\.\d+)(:\d+)?', wda_url)
+            if _m:
+                ipv4_url = f'http://{_m.group(1)}{_m.group(2) or f":{self.wda_port}"}'
+                try:
+                    with urllib.request.urlopen(f'{ipv4_url}/status', timeout=3) as r:
+                        if r.status == 200:
+                            print(f"  ✅ WDA IPv4 응답 확인: {ipv4_url}")
+                            self.clear_wda_sessions(ipv4_url)
+                            return ipv4_url
+                except Exception:
+                    pass
+            # IPv6 URL → WDA 기동됐으므로 /status 에서 ios.ip(IPv4) 추출
+            if wda_url.startswith('http://['):
+                try:
+                    with urllib.request.urlopen(f'{wda_url}/status', timeout=4) as _r:
+                        _d = __import__('json').loads(_r.read())
+                        _ip4 = _d.get('value', _d).get('ios', {}).get('ip', '')
+                        if _ip4 and _ip4.startswith(('10.', '172.', '192.')):
+                            ipv4_url = f'http://{_ip4}:{self.wda_port}'
+                            print(f"  ✅ WDA IPv6→IPv4: {wda_url} → {ipv4_url}")
+                            self.clear_wda_sessions(ipv4_url)
+                            return ipv4_url
+                except Exception:
+                    pass
+                print(f"  ⚠️ sh 반환 URL이 IPv6 — Appium 비호환, 반환 안 함: {wda_url}")
+                return None
+        return wda_url  # 스크립트가 출력한 URL (IPv4인 경우)
+
     def find_wda_url(self, iphone_ip: str, udid: str | None = None) -> str | None:
-        """WDA 실행 중인 포트 확인 + 세션 정리 + 없으면 devicectl로 기동.
+        """WDA 실행 중인 포트 확인 + 세션 정리 + 없으면 setup_wda_iphone.sh 로 기동.
 
         IPv6 주소로 WDA 통신이 되더라도, Appium xcuitest 드라이버가
         bracket IPv6 URL을 "Invalid URL"로 거부할 수 있으므로
         WDA /status에서 IPv4 주소를 추출하여 URL을 재구성합니다.
+
+        iproxy 포트포워딩이 활성화된 경우 localhost:WDA_PORT 에도 응답하므로
+        먼저 localhost 를 프로브합니다.
         """
         import urllib.request, json as _json
+
+        # ── 0. localhost(iproxy) 우선 확인 ───────────────────────────────
+        local_url = f'http://localhost:{self.wda_port}'
+        try:
+            with urllib.request.urlopen(f'{local_url}/status', timeout=2) as r:
+                if r.status == 200:
+                    print(f"  ✅ WDA 실행 중인 WDA 재사용: {local_url}")
+                    self.clear_wda_sessions(local_url)
+                    return local_url
+        except Exception:
+            pass
+
         host = _ip_host(iphone_ip)
-        for port in [8110, 8100, 8200, 27753]:
+        for port in [8100, 8200, 27753]:
             try:
                 url = f'http://{host}:{port}/status'
                 with urllib.request.urlopen(url, timeout=2) as r:
@@ -329,78 +358,22 @@ class IosWdaManager:
                         return base_url
             except Exception:
                 continue
-        if udid and iphone_ip:
-            print(f"  ⚠️ 실행 중인 WDA 없음 (udid={udid[:8]}...)")
-        else:
-            print(f"  ⚠️ 실행 중인 WDA 없음 → Appium이 직접 시작")
+        if udid:
+            print(f"  📡 WDA 없음 → setup_wda_iphone.sh 로 WDA 기동 시도...")
+            return self._launch_wda_via_sh_script(udid)
+        print(f"  ⚠️ 실행 중인 WDA 없음 → Appium이 직접 시작")
         return None
 
     def launch_wda_via_devicectl(self, udid: str, iphone_ip: str) -> str | None:
-        """WDA 앱 기동 (macOS: devicectl, Windows/Linux: tidevice fallback)."""
-        import json as _json, urllib.request
+        """WDA 앱 기동 — macOS: setup_wda_iphone.sh, Windows/Linux: tidevice fallback."""
+        import urllib.request
 
         # ── Windows / Linux: tidevice로 WDA 기동 ─────────────────────────
         if sys.platform != 'darwin':
             return self._launch_wda_via_tidevice(udid, iphone_ip)
 
-        try:
-            # xcodebuild test-without-building 방식: XCTest 런너를 올바르게 기동하여
-            # WDA HTTP 서버(USE_PORT)가 시작되도록 함.
-            # devicectl process launch는 XCTest 환경변수(USE_PORT 등)를 전달하지 못해
-            # WDA HTTP 서버가 뜨지 않음.
-            import glob as _glob
-
-            # xctestrun 파일 탐색 (DerivedData)
-            xctestrun_pattern = os.path.expanduser(
-                '~/Library/Developer/Xcode/DerivedData/WebDriverAgent-*/Build/Products/*.xctestrun'
-            )
-            xctestrun_files = sorted(_glob.glob(xctestrun_pattern), key=os.path.getmtime, reverse=True)
-            if not xctestrun_files:
-                print(f"  ⚠️ xctestrun 파일 없음 (Xcode에서 WDA 한번 빌드 필요)")
-                return None
-            xctestrun = xctestrun_files[0]
-
-            # xctestrun에서 USE_PORT 읽기
-            import plistlib as _plist
-            wda_port = self.wda_port
-            try:
-                with open(xctestrun, 'rb') as _f:
-                    _xt = _plist.load(_f)
-                for _tgt, _vals in _xt.items():
-                    if _tgt.startswith('__'):
-                        continue
-                    _use_port = _vals.get('EnvironmentVariables', {}).get('USE_PORT', '')
-                    if _use_port:
-                        wda_port = int(_use_port)
-                        break
-            except Exception:
-                pass
-
-            host = _ip_host(iphone_ip)
-            print(f"  🚀 WDA 기동 (xcodebuild test-without-building, port={wda_port})...")
-            subprocess.Popen(
-                ['xcodebuild', 'test-without-building',
-                 '-xctestrun', xctestrun,
-                 '-destination', f'id={udid}'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            for i in range(60):
-                time.sleep(1)
-                try:
-                    url = f'http://{host}:{wda_port}/status'
-                    with urllib.request.urlopen(url, timeout=1) as r:
-                        if r.status == 200:
-                            print(f"  ✅ WDA 시작 완료 ({i+1}초 소요): http://{host}:{wda_port}")
-                            self._cached_iphone_ip = iphone_ip
-                            self.wda_port = wda_port
-                            return f'http://{host}:{wda_port}'
-                except Exception:
-                    if (i + 1) % 5 == 0:
-                        print(f"  ⏳ WDA 대기 중... ({i+1}초)")
-            print(f"  ⚠️ WDA 시작 타임아웃 (60초)")
-        except Exception as e:
-            print(f"  ⚠️ WDA 실행 실패: {e}")
-        return None
+        # ── macOS: setup_wda_iphone.sh ────────────────────────────────────
+        return self._launch_wda_via_sh_script(udid)
 
     def clear_wda_sessions(self, wda_base_url: str) -> None:
         """WDA 기존 세션 삭제 (Appium 연결 전 socket hang up 방지)."""
@@ -429,7 +402,7 @@ class IosWdaManager:
             print(f"  ⚠️ tidevice 없음 → pip install tidevice 로 설치하세요")
             return None
 
-        bundle_id = 'com.jjun.1.WebDriverAgentRunner'
+        bundle_id = os.environ.get('WDA_BUNDLE_ID', 'com.jjun.1.WebDriverAgentRunner.xctrunner')
         cmd = ['tidevice']
         if udid:
             cmd += ['-u', udid]
@@ -454,6 +427,151 @@ class IosWdaManager:
                     print(f"  ⏳ WDA 대기 중... ({i+1}초)")
         print(f"  ⚠️ WDA 시작 타임아웃 (30초)")
         return None
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 무선 연결 Watchdog
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def start_connection_watchdog(
+        self, udid: str, interval: int = 15
+    ) -> None:
+        """백그라운드 daemon 스레드로 iPhone 무선 연결 상태를 감시한다.
+
+        tunnelState != connected 감지 시:
+          1. IPA install (devicectl) → 디바이스 wake-up + 재연결 트리거
+          2. tunnelIP 재확보 대기 (최대 30초)
+          3. WDA 재기동 (setup_wda_iphone.sh)
+        """
+        if self._watchdog_thread and self._watchdog_thread.is_alive():
+            return  # 이미 실행 중
+        self._watchdog_stop = threading.Event()
+        self._watchdog_thread = threading.Thread(
+            target=self._run_connection_watchdog,
+            args=(udid, interval),
+            daemon=True,
+            name=f'wda-watchdog-{udid[:8]}',
+        )
+        self._watchdog_thread.start()
+        print(f"  🐕 WDA 무선 연결 Watchdog 시작 (UDID: {udid[:8]}..., 간격: {interval}s)")
+
+    def stop_connection_watchdog(self) -> None:
+        """Watchdog 스레드 중지."""
+        if self._watchdog_stop:
+            self._watchdog_stop.set()
+
+    def _run_connection_watchdog(
+        self, udid: str, interval: int
+    ) -> None:
+        import json as _json
+        import urllib.request
+
+        stop = self._watchdog_stop
+        consecutive_failures = 0
+
+        while stop and not stop.wait(timeout=interval):
+            try:
+                tmp = os.path.join(_TMP, f'_wdog_{udid[:8]}.json')
+                subprocess.run(
+                    ['xcrun', 'devicectl', 'list', 'devices', '--json-output', tmp],
+                    capture_output=True, timeout=8
+                )
+                with open(tmp) as f:
+                    data = _json.load(f)
+                os.unlink(tmp)
+
+                for dev in data.get('result', {}).get('devices', []):
+                    if dev.get('hardwareProperties', {}).get('udid', '') != udid:
+                        continue
+                    conn = dev.get('connectionProperties', {})
+                    state = conn.get('tunnelState', '')
+                    tunnel_ip = conn.get('tunnelIPAddress', '')
+
+                    if state == 'connected' and tunnel_ip:
+                        # 연결 정상 — WDA heartbeat
+                        consecutive_failures = 0
+                        wda_url = f'http://[{tunnel_ip}]:{self.wda_port}'
+                        try:
+                            with urllib.request.urlopen(
+                                f'{wda_url}/status', timeout=3
+                            ) as r:
+                                if r.status != 200:
+                                    raise Exception('WDA status not 200')
+                        except Exception:
+                            consecutive_failures += 1
+                            if consecutive_failures >= 2:
+                                print(
+                                    f"  ⚠️ [Watchdog] WDA 응답 없음 ({consecutive_failures}회) "
+                                    f"→ 재기동 시도"
+                                )
+                                self._watchdog_reconnect(udid)
+                                consecutive_failures = 0
+                    else:
+                        consecutive_failures += 1
+                        print(
+                            f"  ⚠️ [Watchdog] 무선 연결 끊김 (state={state}) "
+                            f"— 재연결 시도 #{consecutive_failures}"
+                        )
+                        self._watchdog_reconnect(udid)
+                        consecutive_failures = 0
+                    break
+
+            except Exception as e:
+                print(f"  ⚠️ [Watchdog] 상태 확인 오류: {e}")
+
+    def _watchdog_reconnect(self, udid: str) -> None:
+        """연결 끊김 시 IPA install → tunnelIP 재확보 → WDA 재기동."""
+        import json as _json
+
+        sh = self._sh_script_path()
+        if not os.path.isfile(sh):
+            print("  [Watchdog] setup_wda_iphone.sh 없음 — 재연결 불가")
+            return
+
+        # IPA 재설치 → 디바이스 wake-up
+        print("  🔄 [Watchdog] IPA install로 디바이스 재연결 트리거...")
+        env = os.environ.copy()
+        env['WDA_PORT'] = str(self.wda_port)
+        env['TARGET_UDID'] = udid
+        proc = subprocess.Popen(
+            ['bash', sh],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, env=env
+        )
+        import re as _re
+        wda_url_found = None
+        for line in proc.stdout:  # type: ignore[union-attr]
+            line = line.rstrip()
+            if line:
+                print(f"  [wdog-sh] {line}")
+            if 'WDA_URL' in line and 'http://' in line:
+                m = _re.search(r'http://[^\s]+', line)
+                if m:
+                    wda_url_found = m.group(0)
+        proc.wait()
+
+        if wda_url_found:
+            # IPv6이면 ios.ip 추출
+            import urllib.request
+            if wda_url_found.startswith('http://['):
+                try:
+                    with urllib.request.urlopen(
+                        f'{wda_url_found}/status', timeout=4
+                    ) as r:
+                        val = __import__('json').loads(r.read()).get('value', {})
+                        ipv4 = val.get('ios', {}).get('ip', '')
+                        if ipv4:
+                            self._cached_iphone_ip = ipv4
+                            print(f"  ✅ [Watchdog] 재연결 성공: {ipv4}")
+                            return
+                except Exception:
+                    pass
+            else:
+                m4 = _re.search(r'(\d+\.\d+\.\d+\.\d+)', wda_url_found)
+                if m4:
+                    self._cached_iphone_ip = m4.group(1)
+                    print(f"  ✅ [Watchdog] 재연결 성공: {m4.group(1)}")
+                    return
+        print("  ❌ [Watchdog] 재연결 실패")
 
     def terminate_wda_process(self, udid: str) -> None:
         """devicectl로 iPhone WDA 프로세스 강제 종료."""

@@ -107,8 +107,8 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: auto auto 1fr;
-  gap: 8px;
-  padding: 10px;
+  gap: 10px;
+  padding: 12px;
   flex: 1;
   overflow: hidden;
   min-height: 0;
@@ -428,7 +428,7 @@ button { cursor: pointer; font-family: inherit; }
 .log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-shrink: 0; }
 .log-header-actions { display: flex; gap: 4px; }
 .log-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
-.log-body { flex: 1; overflow-y: auto; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border-soft); padding: 6px 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; min-height: 0; }
+.log-body { flex: 1; overflow-y: auto; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border-soft); padding: 6px 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; min-height: 0; contain: layout style paint; }
 .log-body::-webkit-scrollbar { width: 4px; }
 .log-body::-webkit-scrollbar-track { background: transparent; }
 .log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

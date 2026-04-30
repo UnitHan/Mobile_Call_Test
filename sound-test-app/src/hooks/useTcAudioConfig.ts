@@ -58,7 +58,11 @@ export function useTcSpeakerConfig() {
     if (!loaded.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      invoke("save_tc_speaker_config", { config: JSON.stringify(config) }).catch(console.warn);
+      const saveable: Record<string, Record<string, string>> = {};
+      for (const [k, v] of Object.entries(config)) {
+        saveable[k] = v as Record<string, string>;
+      }
+      invoke("save_tc_speaker_config", { config: JSON.stringify(saveable) }).catch(console.warn);
     }, 500);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);

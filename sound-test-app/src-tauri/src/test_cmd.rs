@@ -775,6 +775,7 @@ pub async fn run_dropout_analysis(
     app_tag: Option<String>,
     android_app_package: Option<String>,
     ios_app_bundle_id: Option<String>,
+    skip_mos: Option<bool>,
 ) -> Result<DropoutAnalysisResult, String> {
     println!("📊 음단절 분석 시작 — 정답지S1: {} / 정답지S2: {} / 프로파일: {}",
              ref_audio_path_s1, ref_audio_path_s2, profile_name);
@@ -872,6 +873,11 @@ pub async fn run_dropout_analysis(
     let is_mos_only = tc == "TC_00";
     if is_mos_only {
         cmd.arg("--mos-only");
+    }
+    // MOS 측정 ON/OFF (설정에서 OFF 시 --no-mos 전달)
+    if skip_mos.unwrap_or(false) && !is_mos_only {
+        cmd.arg("--no-mos");
+        println!("  ℹ️  MOS 측정 OFF (설정) — --no-mos 전달");
     }
     // per-run 보고서 경로 — 날짜별 폴더 + epoch 초로 고유 파일명 생성 (덮어쓰기 방지)
     let epoch_secs = std::time::SystemTime::now()

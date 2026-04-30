@@ -14,6 +14,8 @@ interface DeviceSectionProps {
   androidDevices?: DeviceInfo[];
   iosDevices: DeviceInfo[];
   onInstallWda: (udid: string | null) => void;
+  /** WDA 설치 대상 UDID — Settings에서 설정, App.tsx에서 전달 */
+  wdaUdid?: string;
   watchdogRunning: boolean;
   onStartWatchdog: () => void;
   onStopWatchdog: () => void;
@@ -31,13 +33,12 @@ export function DeviceSection({
   androidDevices = [],
   iosDevices,
   onInstallWda,
+  wdaUdid: wdaUdidProp = "",
   watchdogRunning,
   onStartWatchdog,
   onStopWatchdog,
   notices = [],
 }: DeviceSectionProps) {
-  const [wdaUdid, setWdaUdid] = useState<string>("");
-
   // 공지 슬라이드 인덱스
   const [noticeIdx, setNoticeIdx] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -57,7 +58,7 @@ export function DeviceSection({
 
   const currentNotice = notices[noticeIdx];
 
-  const targetUdid = wdaUdid || (iosDevices[0]?.udid ?? null);
+  const targetUdid = wdaUdidProp || (iosDevices[0]?.udid ?? null);
 
   const { t } = useT();
 
@@ -143,20 +144,10 @@ export function DeviceSection({
 
           <div className="field-row" style={{ marginTop: "6px" }}>
             <span className="device-tag ios">WDA</span>
-            {iosDevices.length > 1 && (
-              <select
-                className="inp"
-                style={{ flex: 1, fontSize: "0.78rem" }}
-                value={wdaUdid}
-                onChange={(e) => setWdaUdid(e.target.value)}
-              >
-                <option value="">{t("device.wdaAutoSelect")}</option>
-                {iosDevices.map((d) => (
-                  <option key={d.udid} value={d.udid}>
-                    {d.name} ({d.udid.slice(0, 8)}…)
-                  </option>
-                ))}
-              </select>
+            {wdaUdidProp && (
+              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginRight: 4 }}>
+                {iosDevices.find((d) => d.udid === wdaUdidProp)?.name ?? wdaUdidProp.slice(0, 8) + "…"}
+              </span>
             )}
             <button
               className="btn-xs"

@@ -12,6 +12,11 @@ const STORAGE_KEY    = "ixio-audio-profiles";
 const SELECTED_KEY   = "ixio-selected-profile-id";
 
 // ── 기본 프로파일 ─────────────────────────────────────────────────────────────
+
+// dating 테스트 음원 경로 (설정 모달 파일 피커로 변경 가능)
+const DATING_S1 = "/Users/m9test/yjlee/Mobile_Call_Test/sound-test-app/audio_files/dating_SPEAKER_00.wav";
+const DATING_S2 = "/Users/m9test/yjlee/Mobile_Call_Test/sound-test-app/audio_files/dating_SPEAKER_01.wav";
+
 const DEFAULT_PROFILES: AudioProfile[] = [
   {
     id:   "daily",
@@ -33,6 +38,16 @@ const DEFAULT_PROFILES: AudioProfile[] = [
     refAudioPath: "",
     scriptPath: "",
   },
+  {
+    id:   "dating",
+    name: "데이팅",
+    speaker1AudioFile: DATING_S1,
+    speaker2AudioFile: DATING_S2,
+    refAudioPathS1: DATING_S1,
+    refAudioPathS2: DATING_S2,
+    refAudioPath: "",
+    scriptPath: "",
+  },
 ];
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -43,7 +58,7 @@ function loadProfiles(): AudioProfile[] {
     const parsed = JSON.parse(raw) as AudioProfile[];
     if (!parsed.length) return DEFAULT_PROFILES;
     // 하위호환 마이그레이션: refAudioPath만 있고 S1/S2가 없는 경우 + 하드웨어 필드 strip
-    return parsed.map((p) => ({
+    const mapped = parsed.map((p) => ({
       id: p.id,
       // "보이스피싱 테스트" → "보이스피싱" 이름 마이그레이션
       name: p.id === "phishing" && p.name === "보이스피싱 테스트" ? "보이스피싱" : p.name,
@@ -54,6 +69,13 @@ function loadProfiles(): AudioProfile[] {
       refAudioPath:   p.refAudioPath   ?? "",
       scriptPath: p.scriptPath ?? "",
     }));
+    // 내장 프로파일 누락 시 append (신규 기본 프로파일이 기존 사용자에게 자동 노출)
+    for (const def of DEFAULT_PROFILES) {
+      if (!mapped.some((p) => p.id === def.id)) {
+        mapped.push(def);
+      }
+    }
+    return mapped;
   } catch {
     return DEFAULT_PROFILES;
   }
@@ -133,7 +155,7 @@ export function useAudioProfiles(): UseAudioProfilesResult {
 
   const removeProfile = useCallback((id: string) => {
     // 기본 프로파일 삭제 방지
-    if (id === "phishing" || id === "daily") return;
+    if (id === "phishing" || id === "daily" || id === "dating") return;
     setProfiles((prev) => {
       const next = prev.filter((p) => p.id !== id);
       saveProfiles(next);

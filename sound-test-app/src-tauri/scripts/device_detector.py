@@ -105,11 +105,15 @@ def detect_ios_devices() -> list[dict]:
                 if not udid:
                     continue
 
-                # 연결 상태 확인 (connected / unavailable)
-                state = dev.get('connectionState', '')
-                if not state:
-                    # 구버전 JSON: connectionProperties 안에 있을 수 있음
-                    state = conn.get('connectionState', 'unknown')
+                # pairingState == 'paired' 이면 tunnelState 무관하게 포함
+                # (disconnected = 무선 등록됐지만 터널 미연결, unavailable = 비활성)
+                pairing = conn.get('pairingState', '')
+                if pairing != 'paired':
+                    continue
+
+                tunnel_state = conn.get('tunnelState', 'unknown')
+                # state 표시: connected / disconnected / unavailable
+                state = tunnel_state
 
                 # 호스트명 수집 (mDNS용)
                 hostnames = conn.get('localHostnames', [])

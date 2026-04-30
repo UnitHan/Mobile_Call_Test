@@ -5,6 +5,26 @@ use crate::types::{ConnectionStatus, DeviceInfo, DeviceListResponse};
 use crate::state::{ui_log, WATCHDOG_PROCESS, WATCHDOG_DEVICES};
 use crate::utils::{find_tool, extended_path, find_python, venv_python, scripts_dir};
 
+/// Android 기기의 화면 꺼짐 타임아웃을 24시간으로 설정합니다.
+/// 무선 연결 및 워치독 시작 시 자동 호출됩니다.
+fn apply_screen_always_on(adb: &str, device: &str) {
+    match Command::new(adb)
+        .args(&["-s", device, "shell", "settings", "put", "system", "screen_off_timeout", "86400000"])
+        .output()
+    {
+        Ok(out) if out.status.success() => {
+            ui_log(&format!("🖥️  화면 꺼짐 방지 설정 완료 (24h): {}", device));
+        }
+        Ok(out) => {
+            let msg = String::from_utf8_lossy(&out.stderr);
+            ui_log(&format!("⚠️  화면 꺼짐 설정 실패 ({}): {}", device, msg.trim()));
+        }
+        Err(e) => {
+            ui_log(&format!("⚠️  화면 꺼짐 설정 오류 ({}): {}", device, e));
+        }
+    }
+}
+
 /// PATH + Homebrew + Android SDK를 포함한 확장 경로에서 adb를 찾습니다.
 /// 내부적으로 `utils::find_tool()` 에 위임합니다.
 pub(crate) fn find_adb() -> Result<String, String> {
@@ -78,6 +98,9 @@ pub async fn connect_android_wireless(ip_port: String) -> Result<ConnectionStatu
                 ui_log(&format!("⚠️  adb forward 오류: {}", e));
             }
         }
+
+        // 화면 꺼짐 방지: 24시간 유지
+        apply_screen_always_on(&adb, &ip_port);
     }
 
     Ok(result)
@@ -295,10 +318,10 @@ pub fn check_iphone_connection() -> Result<ConnectionStatus, String> {
 
     // ── devicectl JSON + Python 파싱 (무선/USB 모두 지원) ──
     let tmp_path = "/tmp/devicectl_check.json";
-    let ran = Command::new("xcrun")
-        .args(&["devicectl", "list", "devices", "--json-output", tmp_path])
-        .output()
-        .map(|o| o.status.success())
+    let mut dc_cmd = Command::new("xcrun");
+    dc_cmd.args(&["devicectl", "list", "devices", "--json-output", tmp_path]);
+    let ran = run_cmd_timeout(dc_cmd, 5)  // 타임아웃 5초: 무응답 시 kill
+        .map(|_| std::path::Path::new(tmp_path).exists())
         .unwrap_or(false);
 
     if ran {
@@ -322,19 +345,20 @@ try:
     found=[]
     for dev in d.get('result',{{}}).get('devices',[]):
         conn=dev.get('connectionProperties',{{}})
-        state=conn.get('tunnelState','')
+        tunnel=conn.get('tunnelState','')
+        pairing=conn.get('pairingState','')
         udid=dev.get('hardwareProperties',{{}}).get('udid','')
         name=dev.get('deviceProperties',{{}}).get('name','iPhone')
         transport=conn.get('transportType','')
-        if state=='connected' and udid:
-            if transport=='localNetwork':
-                ip=get_local_ip(name)
-                tag=f'무선 {{ip}}' if ip else '무선'
-            elif transport=='wired':
-                tag='유선'
-            else:
-                tag=transport or '?'
-            found.append(f'{{name}} [{{tag}}] ({{udid}})')
+        if pairing!='paired' or not udid:
+            continue
+        if transport=='localNetwork':
+            tag=f'무선({{tunnel}})'
+        elif transport=='wired':
+            tag='유선'
+        else:
+            tag=f'페어링({{tunnel}})'
+        found.append(f'{{name}} [{{tag}}] ({{udid}})')
     print('FOUND:'+', '.join(found) if found else 'NONE')
 except Exception as e:
     print(f'ERR:{{e}}',file=sys.stderr); print('NONE')
@@ -621,6 +645,7 @@ pub async fn start_android_watchdog(
         let mut guard = WATCHDOG_PROCESS.lock().expect("WATCHDOG_PROCESS Mutex 오염");
         if let Some(mut child) = guard.take() {
             let _ = child.kill();
+            let _ = child.wait();
         }
     }
 
@@ -662,7 +687,14 @@ pub async fn start_android_watchdog(
 
     *WATCHDOG_PROCESS.lock().expect("WATCHDOG_PROCESS Mutex 오염") = Some(child);
     // 감시 기기 목록 저장 (테스트 시작 시 adb kill-server 후 자동 재연결에 사용)
-    *WATCHDOG_DEVICES.lock().expect("WATCHDOG_DEVICES Mutex 오염") = devices;
+    *WATCHDOG_DEVICES.lock().expect("WATCHDOG_DEVICES Mutex 오염") = devices.clone();
+
+    // 화면 꺼짐 방지: 워치독 대상 기기 전체에 24시간 적용
+    if let Ok(adb) = find_adb() {
+        for dev in &devices {
+            apply_screen_always_on(&adb, dev);
+        }
+    }
 
     Ok(ConnectionStatus { success: true, message: msg })
 }
@@ -672,6 +704,7 @@ pub async fn stop_android_watchdog() -> Result<ConnectionStatus, String> {
     let mut guard = WATCHDOG_PROCESS.lock().expect("WATCHDOG_PROCESS Mutex 오염");
     if let Some(mut child) = guard.take() {
         let _ = child.kill();
+        let _ = child.wait();
         WATCHDOG_DEVICES.lock().expect("WATCHDOG_DEVICES Mutex 오염").clear();
         ui_log("🛑 Watchdog 정지됨");
         Ok(ConnectionStatus { success: true, message: "🛑 Watchdog 정지됨".to_string() })
@@ -696,12 +729,12 @@ fn fetch_ios_app_version_sync(pkg: &str) -> String {
 
     // ① xcrun devicectl list devices → UUID → device info apps --include-all-apps
     let tmp = format!("/tmp/ixio_devver_{}.json", std::process::id());
-    let _ = Command::new("xcrun")
-        .env("PATH", &path)
+    let mut dc_list_cmd = Command::new("xcrun");
+    dc_list_cmd.env("PATH", &path)
         .args(["devicectl", "list", "devices", "--json-output", &tmp])
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+        .stderr(Stdio::null());
+    run_cmd_timeout(dc_list_cmd, 5);  // 5초 타임아웃
 
     let uuid: Option<String> = (|| {
         let data = std::fs::read_to_string(&tmp).ok()?;
@@ -728,8 +761,8 @@ fn fetch_ios_app_version_sync(pkg: &str) -> String {
     })();
 
     if let Some(uuid) = uuid {
-        if let Ok(out) = Command::new("xcrun")
-            .env("PATH", &path)
+        let mut dc_info_cmd = Command::new("xcrun");
+        dc_info_cmd.env("PATH", &path)
             .args([
                 "devicectl",
                 "device",
@@ -738,10 +771,8 @@ fn fetch_ios_app_version_sync(pkg: &str) -> String {
                 "--device",
                 &uuid,
                 "--include-all-apps",
-            ])
-            .output()
-        {
-            let text = String::from_utf8_lossy(&out.stdout);
+            ]);
+        if let Some(text) = run_cmd_timeout(dc_info_cmd, 10) {  // 10초 타임아웃
             for line in text.lines() {
                 if line.contains(pkg) {
                     let parts: Vec<&str> = line.split_whitespace().collect();
